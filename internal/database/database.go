@@ -362,6 +362,33 @@ func GenerateInvoiceNumber() (string, error) {
 	return fmt.Sprintf("INV-%s-%05d", dateKey, lastSeq), nil
 }
 
+// GenerateInvoiceNumberWithTx creates invoice number using existing transaction
+func GenerateInvoiceNumberWithTx(tx *sql.Tx) (string, error) {
+	now := time.Now()
+	dateKey := now.Format("20060102")
+
+	// Get or create sequence for today
+	var lastSeq int64
+	err := tx.QueryRow("SELECT last_seq FROM invoice_sequence WHERE date_key = ?", dateKey).Scan(&lastSeq)
+	if err != nil {
+		// First invoice today
+		_, err = tx.Exec("INSERT INTO invoice_sequence (date_key, last_seq) VALUES (?, 1)", dateKey)
+		if err != nil {
+			return "", err
+		}
+		lastSeq = 1
+	} else {
+		// Increment sequence
+		lastSeq++
+		_, err = tx.Exec("UPDATE invoice_sequence SET last_seq = ? WHERE date_key = ?", lastSeq, dateKey)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return fmt.Sprintf("INV-%s-%05d", dateKey, lastSeq), nil
+}
+
 func NullInt64(v int64) sql.NullInt64 {
 	if v == 0 {
 		return sql.NullInt64{}

@@ -15,12 +15,17 @@ import (
 )
 
 func Checkout(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("=== CHECKOUT DEBUG START ===")
 	claims := middleware.GetClaims(r)
+	fmt.Printf("[DEBUG] User ID: %d, Username: %s\n", claims.UserID, claims.Username)
+
 	var req models.CheckoutRequestV3
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		fmt.Printf("[ERROR] Decode request body: %v\n", err)
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Request tidak valid"})
 		return
 	}
+	fmt.Printf("[DEBUG] Request decoded - Items: %d, PaymentMethod: %s\n", len(req.Items), req.PaymentMethod)
 	if len(req.Items) == 0 {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Keranjang belanja kosong"})
 		return
@@ -33,14 +38,12 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := database.DB.Begin()
 	if err != nil {
+		fmt.Printf("[ERROR] Begin transaction: %v\n", err)
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal memulai transaksi"})
 		return
 	}
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
+	defer tx.Rollback() // Always rollback, akan diabaikan jika sudah commit
+	fmt.Println("[DEBUG] Transaction started successfully")
 
 	type itemDetail struct {
 		product                       models.Product
@@ -53,24 +56,24 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 
 	for _, item := range req.Items {
 		if item.Quantity <= 0 {
-			err = fmt.Errorf("qty")
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Kuantitas harus > 0"})
 			return
 		}
 		var p models.Product
 		var catName string
+		fmt.Printf("[DEBUG] Checking product ID: %d\n", item.ProductID)
 		scanErr := tx.QueryRow(
 			`SELECT p.id, p.barcode_sku, p.name, COALESCE(c.name,''), p.buy_price, p.sell_price, p.stock
 			 FROM products p LEFT JOIN categories c ON p.category_id=c.id
 			 WHERE p.id=? AND p.is_deleted=0`, item.ProductID,
 		).Scan(&p.ID, &p.BarcodeSKU, &p.Name, &catName, &p.BuyPrice, &p.SellPrice, &p.Stock)
 		if scanErr != nil {
-			err = scanErr
+			fmt.Printf("[ERROR] Product query scan: %v for ProductID: %d\n", scanErr, item.ProductID)
 			writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: fmt.Sprintf("Produk ID %d tidak ditemukan", item.ProductID)})
 			return
 		}
+		fmt.Printf("[DEBUG] Product found: %s (Stock: %d)\n", p.Name, p.Stock)
 		if p.Stock < item.Quantity {
-			err = fmt.Errorf("stock")
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Stok %s tidak cukup (tersedia: %d)", p.Name, p.Stock)})
 			return
 		}
@@ -127,7 +130,6 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		cashAmt = req.PaymentAmount
 		qrisAmt = 0
 		if req.PaymentAmount < totalAmount {
-			err = fmt.Errorf("kurang")
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Pembayaran kurang. Total: Rp %.0f", totalAmount)})
 			return
 		}
@@ -137,13 +139,11 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		req.PaymentAmount = totalAmount
 	case "split":
 		if cashAmt < 0 || qrisAmt < 0 {
-			err = fmt.Errorf("split negative")
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Nominal split tidak boleh negatif"})
 			return
 		}
 		total := cashAmt + qrisAmt
 		if total < totalAmount {
-			err = fmt.Errorf("split kurang")
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Total split (Rp %.0f) kurang dari total transaksi (Rp %.0f)", total, totalAmount)})
 			return
 		}
@@ -155,11 +155,14 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	invoice, err := database.GenerateInvoiceNumber()
+	fmt.Println("[DEBUG] Generating invoice number with existing transaction...")
+	invoice, err := database.GenerateInvoiceNumberWithTx(tx)
 	if err != nil {
+		fmt.Printf("[ERROR] Generate invoice number: %v\n", err)
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal generate invoice number"})
 		return
 	}
+	fmt.Printf("[DEBUG] Invoice generated: %s\n", invoice)
 
 	// Penting #5: resolve customer nullable
 	var custID interface{} = nil
@@ -171,36 +174,44 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		onCreditVal = 1
 	}
 
+	fmt.Printf("[DEBUG] Inserting transaction - Invoice: %s, Total: %.2f, Payment: %.2f\n", invoice, totalAmount, req.PaymentAmount)
 	result, err := tx.Exec(
 		`INSERT INTO transactions
 		(invoice_number,user_id,customer_id,total_amount,payment_amount,change_amount,payment_method,cash_amount,qris_amount,
 		 discount_code,discount_amount,ppn_amount,on_credit,status,version,created_at,created_by,updated_at,updated_by)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'completed',1,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		invoice, claims.UserID, custID, totalAmount, req.PaymentAmount, changeAmount, req.PaymentMethod, cashAmt, qrisAmt,
-		discountCode, discountAmount, ppnAmount, onCreditVal, now, claims.UserID, now, claims.UserID,
+		discountCode, discountAmount, ppnAmount, onCreditVal, "completed", 1, now, claims.UserID, now, claims.UserID,
 	)
 	if err != nil {
+		fmt.Printf("[ERROR] Insert transaction: %v\n", err)
+		fmt.Printf("[ERROR] Values: invoice=%s, userID=%d, custID=%v, total=%.2f\n", invoice, claims.UserID, custID, totalAmount)
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal simpan transaksi"})
 		return
 	}
 	txID, _ := result.LastInsertId()
 
 	var txDetails []models.TransactionDetail
-	for _, d := range details {
+	fmt.Printf("[DEBUG] Inserting %d transaction details...\n", len(details))
+	for i, d := range details {
+		fmt.Printf("[DEBUG] Detail %d: Product %s (ID: %d), Qty: %d\n", i+1, d.product.Name, d.product.ID, d.qty)
 		_, err = tx.Exec(
 			`INSERT INTO transaction_details (transaction_id,product_id,product_name,category_name,quantity,unit_price,buy_price,subtotal,created_at)
 			 VALUES (?,?,?,?,?,?,?,?,?)`,
 			txID, d.product.ID, d.product.Name, d.catName, d.qty, d.unitPrice, d.buyPrice, d.subtotal, now,
 		)
 		if err != nil {
+			fmt.Printf("[ERROR] Insert transaction detail %d: %v\n", i+1, err)
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal simpan detail"})
 			return
 		}
 
 		stockBefore := d.product.Stock
+		fmt.Printf("[DEBUG] Updating stock for product %d: %d -> %d\n", d.product.ID, stockBefore, stockBefore-d.qty)
 		_, err = tx.Exec("UPDATE products SET stock=stock-?,updated_at=?,updated_by=?,version=version+1 WHERE id=?",
 			d.qty, now, claims.UserID, d.product.ID)
 		if err != nil {
+			fmt.Printf("[ERROR] Update stock for product %d: %v\n", d.product.ID, err)
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal update stok"})
 			return
 		}
@@ -230,6 +241,8 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			req.CustomerID, txID, invoice, totalAmount, "debt", "Pembelian "+invoice, newBalance, claims.UserID, now)
 	}
 
+	fmt.Printf("[DEBUG] Checkout successful - Transaction ID: %d, Invoice: %s\n", txID, invoice)
+	fmt.Println("=== CHECKOUT DEBUG END ===")
 	writeJSON(w, http.StatusCreated, models.APIResponse{
 		Success: true, Message: "Transaksi berhasil",
 		Data: models.Transaction{
