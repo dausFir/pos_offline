@@ -1,0 +1,21 @@
+{
+  "name": "Kasir UMKM",
+  "short_name": "Kasir",
+  "description": "Sistem kasir offline-first untuk UMKM",
+  "start_url": "/pos",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#00458f",
+  "theme_color": "#00458f",
+  "lang": "id",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Kasir / POS",   "url": "/pos",          "description": "Buka halaman kasir" },
+    { "name": "Dashboard",     "url": "/dashboard",     "description": "Buka dashboard" },
+    { "name": "Produk",        "url": "/products",      "description": "Master produk" }
+  ],
+  "categories": ["business", "finance", "productivity"]
+}
