@@ -13,17 +13,74 @@ export default function Login() {
   const [showPass, setShow] = useState(false);
   const [loading, setLoad]  = useState(false);
 
+  console.log('🔥🔥🔥 [LOGIN COMPONENT] Component loaded! 🔥🔥🔥');
+
   const handleSubmit = async (e) => {
+    console.log('🔥🔥🔥 ================================ 🔥🔥🔥');
+    console.log('🔥🔥🔥 [LOGIN PAGE] SUBMIT EVENT TRIGGERED!! 🔥🔥🔥');
+    console.log('🔥🔥🔥 ================================ 🔥🔥🔥');
+    
+    // PREVENT DEFAULT IMMEDIATELY 
     e.preventDefault();
-    if (!form.username || !form.password) { toast.error('Username dan password wajib diisi'); return; }
+    e.stopPropagation();
+    
+    console.log('✅ [LOGIN PAGE] preventDefault() called');
+    console.log('📋 [LOGIN PAGE] Event type:', e.type);
+    console.log('📋 [LOGIN PAGE] Form data:', form);
+    console.log('📋 [LOGIN PAGE] Username:', form.username);
+    console.log('📋 [LOGIN PAGE] Password length:', form.password?.length);
+    
+    if (!form.username || !form.password) { 
+      console.log('❌ [LOGIN PAGE] Missing credentials');
+      toast.error('Username dan password wajib diisi'); 
+      return false;
+    }
+    
+    console.log('⚡ [LOGIN PAGE] Calling login function...');
     setLoad(true);
+    
     try {
+      console.log('🚀 [LOGIN PAGE] About to call await login()...');
       const user = await login(form.username, form.password);
+      console.log('✅ [LOGIN PAGE] Login successful! User:', user);
+      
+      // Verify localStorage before navigation
+      console.log('🔍 [LOGIN PAGE] Checking localStorage before navigation...');
+      const storedAccess = localStorage.getItem('access_token');
+      const storedRefresh = localStorage.getItem('refresh_token');
+      const storedUser = localStorage.getItem('user');
+      
+      console.log('🔍 [LOGIN PAGE] Pre-navigation check:');
+      console.log('   - access_token available:', !!storedAccess);
+      console.log('   - refresh_token available:', !!storedRefresh);
+      console.log('   - user available:', !!storedUser);
+      
+      if (!storedAccess || !storedRefresh || !storedUser) {
+        console.error('🚨 [LOGIN PAGE] CRITICAL: Tokens missing before navigation!');
+        console.error('🚨 [LOGIN PAGE] This will cause 401 errors on next page!');
+        toast.error('Login berhasil tapi token tidak tersimpan. Coba lagi.');
+        return false;
+      }
+      
       toast.success(`Selamat datang, ${user.username}!`);
+      console.log('🧭 [LOGIN PAGE] About to navigate to /pos...');
       navigate('/pos');
+      console.log('✅ [LOGIN PAGE] Navigation to /pos completed');
+      
     } catch (err) {
+      console.error('❌ [LOGIN PAGE] Login failed:', err);
+      console.error('❌ [LOGIN PAGE] Error details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       toast.error(err.response?.data?.error || 'Username atau password salah');
-    } finally { setLoad(false); }
+    } finally { 
+      console.log('🏁 [LOGIN PAGE] Login attempt finished');
+      setLoad(false); 
+    }
+    
+    return false; // Extra insurance against form submission
   };
 
   return (
@@ -66,7 +123,7 @@ export default function Login() {
             {t('lang.toggle')}
           </button>
         </div>
-        <form className="login-form" onSubmit={handleSubmit}>
+        <form className="login-form" onSubmit={handleSubmit} noValidate>
           <div style={{ marginBottom: 32 }}>
             <h2 className="font-headline" style={{ fontSize: 24, fontWeight: 800, color: 'var(--on-surface)', marginBottom: 6 }}>
               Masuk ke Sistem
@@ -84,7 +141,13 @@ export default function Login() {
                 <input className="input" style={{ paddingLeft: 40 }} type="text"
                   placeholder={t('auth.username')} value={form.username}
                   onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                  autoComplete="username" autoFocus />
+                  autoComplete="username" autoFocus 
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }} />
               </div>
             </div>
 
@@ -96,7 +159,13 @@ export default function Login() {
                   type={showPass ? 'text' : 'password'}
                   placeholder={t('auth.password')} value={form.password}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  autoComplete="current-password" />
+                  autoComplete="current-password" 
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }} />
                 <button type="button" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--outline)', display: 'flex', alignItems: 'center' }}
                   onClick={() => setShow(v => !v)}>
                   <Icon name={showPass ? "visibility_off" : "visibility"} size={18} />
@@ -104,7 +173,16 @@ export default function Login() {
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary btn-lg w-full" disabled={loading}
+            <button 
+              type="button" 
+              className="btn btn-primary btn-lg w-full" 
+              disabled={loading}
+              onClick={(e) => {
+                console.log('🔥 [LOGIN PAGE] BUTTON CLICKED!!');
+                e.preventDefault();
+                e.stopPropagation();
+                handleSubmit(e);
+              }}
               style={{ marginTop: 4, boxShadow: '0 4px 16px rgba(0,69,143,.3)' }}>
               {loading
                 ? <span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} />

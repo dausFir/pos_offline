@@ -162,13 +162,38 @@ type AppSettings struct {
 
 // ── Requests ──────────────────────────────────────────────────────────────────
 
+type Session struct {
+	ID               int64     `json:"id"`
+	UserID           int64     `json:"user_id"`
+	RefreshTokenHash string    `json:"-"`
+	DeviceInfo       string    `json:"device_info"`
+	IPAddress        string    `json:"ip_address"`
+	CreatedAt        time.Time `json:"created_at"`
+	LastActivity     time.Time `json:"last_activity"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	IsActive         bool      `json:"is_active"`
+}
+
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
+
 type LoginResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	User         User   `json:"user"`
+	ExpiresIn    int    `json:"expires_in"` // access token expiry in seconds
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
 }
 
 type CheckoutItem struct {

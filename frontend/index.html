@@ -21,9 +21,25 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
+      // Debug console test - FIRST THING
+      console.log('🔥🔥🔥 [BROWSER] HTML loaded - JavaScript working! 🔥🔥🔥');
+      console.log('🔥🔥🔥 [BROWSER] Location:', window.location.href);
+      console.log('🔥🔥🔥 [BROWSER] localStorage available:', !!window.localStorage);
+      
+      // Test localStorage immediately
+      try {
+        localStorage.setItem('browser_test', 'working');
+        console.log('✅ [BROWSER] localStorage test successful');
+        localStorage.removeItem('browser_test');
+      } catch (err) {
+        console.error('❌ [BROWSER] localStorage error:', err);
+        alert('localStorage BROKEN: ' + err.message);
+      }
+      
       // Register service worker for PWA
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
+          console.log('🔥🔥🔥 [BROWSER] Window fully loaded! SW registering... 🔥🔥🔥');
           navigator.serviceWorker.register('/sw.js')
             .then(reg => console.log('SW registered:', reg.scope))
             .catch(err => console.warn('SW failed:', err));

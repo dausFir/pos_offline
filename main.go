@@ -39,6 +39,8 @@ func main() {
 
 	// ── Public ─────────────────────────────────────────────────────────────────
 	api.HandleFunc("/login", handlers.Login).Methods("POST", "OPTIONS")
+	api.HandleFunc("/refresh-token", handlers.RefreshToken).Methods("POST", "OPTIONS")
+	api.HandleFunc("/logout", handlers.Logout).Methods("POST", "OPTIONS")
 	api.HandleFunc("/status", handlers.GetServerStatus).Methods("GET", "OPTIONS") // Kritis #5 — no auth needed
 
 	// ── Protected ──────────────────────────────────────────────────────────────

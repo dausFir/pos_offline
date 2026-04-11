@@ -21,6 +21,25 @@ const SHORTCUT_HELP = [
 ];
 
 export default function POS() {
+  console.log('🛒🛒🛒 [POS PAGE] POS component loading! 🛒🛒🛒');
+  console.log('🔍 [POS PAGE] Checking localStorage availability...');
+  
+  // Check localStorage immediately
+  const storedAccess = localStorage.getItem('access_token');
+  const storedRefresh = localStorage.getItem('refresh_token');
+  const storedUser = localStorage.getItem('user');
+  
+  console.log('🔍 [POS PAGE] POS component localStorage state:');
+  console.log('   - access_token available:', !!storedAccess);
+  console.log('   - access_token length:', storedAccess?.length || 0);
+  console.log('   - refresh_token available:', !!storedRefresh);
+  console.log('   - user available:', !!storedUser);
+  
+  if (!storedAccess) {
+    console.error('🚨 [POS PAGE] CRITICAL: NO ACCESS TOKEN ON POS PAGE LOAD!');
+    console.error('🚨 [POS PAGE] This will cause 401 errors on API calls!');
+  }
+
   const { t } = useI18n();
   const [products,    setProducts]    = useState([]);
   const [cart,        setCart]        = useState([]);
@@ -43,17 +62,59 @@ export default function POS() {
   const searchTimeout = useRef(null);
 
   const fetchProducts = useCallback(async (q = '', cat = '') => {
+    console.log('🛍️ [POS PAGE] fetchProducts called');
+    console.log('   - query:', q);
+    console.log('   - category:', cat);
+    
     try {
       const params = { search: q, limit: 60 };
       if (cat) params.category_id = cat;
+      
+      console.log('📤 [POS PAGE] Making /products API call...');
+      console.log('   - params:', params);
+      
       const res = await api.get('/products', { params });
+      console.log('✅ [POS PAGE] Products API call successful');
+      console.log('   - received products count:', res.data.data?.length || 0);
+      
       setProducts(res.data.data || []);
-    } catch { /* silent */ }
+    } catch (error) {
+      console.error('❌ [POS PAGE] fetchProducts ERROR:', error);
+      console.error('   - status:', error.response?.status);
+      console.error('   - message:', error.message);
+      console.error('   - response data:', error.response?.data);
+      
+      if (error.response?.status === 401) {
+        console.error('🚨 [POS PAGE] 401 UNAUTHORIZED - Token issue detected!');
+      }
+    }
   }, []);
+
+  const fetchCategories = async () => {
+    console.log('📂 [POS PAGE] fetchCategories called');
+    
+    try {
+      console.log('📤 [POS PAGE] Making /categories API call...');
+      const res = await api.get('/categories');
+      
+      console.log('✅ [POS PAGE] Categories API call successful');
+      console.log('   - received categories count:', res.data.data?.length || 0);
+      
+      setCategories(res.data.data || []);
+    } catch (error) {
+      console.error('❌ [POS PAGE] fetchCategories ERROR:', error);
+      console.error('   - status:', error.response?.status);
+      console.error('   - message:', error.message);
+      
+      if (error.response?.status === 401) {
+        console.error('🚨 [POS PAGE] 401 UNAUTHORIZED on categories - Token issue!');
+      }
+    }
+  };
 
   useEffect(() => {
     fetchProducts();
-    api.get('/categories').then(r => setCategories(r.data.data || [])).catch(() => {});
+    fetchCategories();
   }, [fetchProducts]);
 
   useEffect(() => {

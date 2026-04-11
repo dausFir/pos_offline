@@ -20,17 +20,57 @@ import ShiftReport    from './pages/ShiftReport';
 import ImportProducts from './pages/ImportProducts';
 import Layout         from './components/Layout';
 
+// Initial localStorage debug check
+console.log('🏁 [APP.JSX] App.jsx loaded!');
+console.log('🏁 [APP.JSX] Initial localStorage check:');
+console.log('   - access_token:', localStorage.getItem('access_token'));
+console.log('   - refresh_token:', localStorage.getItem('refresh_token'));
+console.log('   - localStorage length:', localStorage.length);
+console.log('   - localStorage keys:', Object.keys(localStorage));
+
 function Guard({ children, adminOnly = false, superAdminOnly = false }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (superAdminOnly && user.role !== 'super_admin') return <Navigate to="/pos" replace />;
-  if (adminOnly && !['super_admin','admin'].includes(user.role)) return <Navigate to="/pos" replace />;
+  
+  console.log('🛡️ [GUARD] Guard component called:');
+  console.log('  - loading:', loading);
+  console.log('  - user exists:', !!user);
+  console.log('  - user role:', user?.role);
+  console.log('  - adminOnly:', adminOnly);
+  console.log('  - superAdminOnly:', superAdminOnly);
+  
+  if (loading) {
+    console.log('⏳ [GUARD] Still loading, showing spinner...');
+    return <div className="loading-screen"><div className="spinner" /></div>;
+  }
+  
+  if (!user) {
+    console.log('🚫 [GUARD] No user, redirecting to /login');
+    return <Navigate to="/login" replace />;
+  }
+  
+  if (superAdminOnly && user.role !== 'super_admin') {
+    console.log('❌ [GUARD] Not super admin, redirecting to /pos');
+    return <Navigate to="/pos" replace />;
+  }
+  
+  if (adminOnly && !['super_admin','admin'].includes(user.role)) {
+    console.log('❌ [GUARD] Not admin, redirecting to /pos');
+    return <Navigate to="/pos" replace />;
+  }
+  
+  console.log('✅ [GUARD] Access granted, rendering children');
   return children;
 }
 
 function AppRoutes() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  
+  console.log('🛣️ [APP ROUTES] AppRoutes component rendering:');
+  console.log('  - user exists:', !!user);
+  console.log('  - user role:', user?.role);
+  console.log('  - loading:', loading);
+  console.log('  - current location:', window.location.pathname);
+  
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
@@ -58,6 +98,31 @@ function AppRoutes() {
 }
 
 export default function App() {
+  console.log('🔥🔥🔥 [APP] App component rendering! 🔥🔥🔥');
+  
+  // Safety mechanism to prevent infinite refresh loops
+  const preventInfiniteLoop = () => {
+    const refreshCount = sessionStorage.getItem('refresh_count') || 0;
+    const newCount = parseInt(refreshCount) + 1;
+    
+    if (newCount > 5) {
+      console.error('🚨 [APP] Infinite refresh loop detected! Clearing storage...');
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.href = '/login';
+      return;
+    }
+    
+    sessionStorage.setItem('refresh_count', newCount);
+    
+    // Clear refresh count after successful load
+    setTimeout(() => {
+      sessionStorage.removeItem('refresh_count');
+    }, 5000);
+  };
+  
+  preventInfiniteLoop();
+  
   return (
     <I18nProvider>
       <AuthProvider>

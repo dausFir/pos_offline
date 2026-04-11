@@ -20,6 +20,8 @@ export default defineConfig({
     assetsDir: 'assets',
     // Increase chunk size warning limit
     chunkSizeWarningLimit: 1000,
+    // Keep console logs for debugging using esbuild
+    minify: 'esbuild',
     rollupOptions: {
       output: {
         // Split vendor chunks for better caching

@@ -2,16 +2,26 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"kasir-umkm/internal/models"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var JWTSecret = []byte("kasir-umkm-super-secret-key-2024-ganti-di-production")
+
+// Access token duration: 30 minutes (short-lived)
+const AccessTokenDuration = 30 * time.Minute
+
+// Refresh token duration: 30 days
+const RefreshTokenDuration = 30 * 24 * time.Hour
 
 type Claims struct {
 	UserID   int64  `json:"user_id"`
@@ -21,20 +31,39 @@ type Claims struct {
 }
 
 type contextKey string
+
 const UserContextKey contextKey = "user"
 
-func GenerateToken(user models.User) (string, error) {
+func GenerateAccessToken(user models.User) (string, error) {
 	claims := Claims{
 		UserID:   user.ID,
 		Username: user.Username,
 		Role:     user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTokenDuration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(JWTSecret)
+}
+
+func GenerateRefreshToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+
+func HashRefreshToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
+}
+
+// Legacy function for backward compatibility
+func GenerateToken(user models.User) (string, error) {
+	return GenerateAccessToken(user)
 }
 
 func AuthMiddleware(next http.Handler) http.Handler {

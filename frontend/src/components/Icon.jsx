@@ -26,7 +26,7 @@ import {
   Zap, Flame, Sparkles, Heart, ThumbsUp,
   LogIn, LogOut as SignOut, Power, Keyboard,
   Group, UserCheck, UserX, Users2,
-  PersonStanding, Contact, BookUser, AddressBook,
+  PersonStanding, Contact, BookUser,
   Handshake, BadgeCheck, Award, Trophy,
   ReceiptText, Calculator, Coins, PiggyBank, BanknoteIcon,
   SplitSquareHorizontal, Merge, GitMerge,

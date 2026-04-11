@@ -145,29 +145,34 @@ ${transaction.ppn_amount > 0 ? `
 
 <div style="height: 10mm;"></div>
 
-<script>
-  window.onload = function() {
-    window.print();
-    setTimeout(function() { window.close(); }, 800);
-  };
-</script>
 </body>
 </html>`;
 
   const iframe = document.createElement('iframe');
   iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;';
   document.body.appendChild(iframe);
-  iframe.contentDocument.open();
-  iframe.contentDocument.write(receiptHTML);
-  iframe.contentDocument.close();
-
+  
+  let printed = false;
+  
   iframe.onload = () => {
+    if (printed) return;
+    printed = true;
+    
     try {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
     } catch(e) { console.error('Print error', e); }
-    setTimeout(() => document.body.removeChild(iframe), 3000);
+    
+    setTimeout(() => {
+      if (iframe.parentNode) {
+        document.body.removeChild(iframe);
+      }
+    }, 3000);
   };
+  
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(receiptHTML);
+  iframe.contentDocument.close();
 }
 
 /**
