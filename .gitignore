@@ -1,0 +1,161 @@
+# ====================
+# GO BACKEND
+# ====================
+
+# Go binary executables 
+kasir-umkm
+kasir-umkm.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+cmd/main
+
+# Go build cache
+*.out
+*.test
+
+# Go module downloads cache
+go.sum.bak
+vendor/
+
+# ====================
+# DATABASE FILES
+# ====================
+
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+database.sqlite*
+
+# ====================
+# FRONTEND (React/Vite)
+# ====================
+
+# Node modules
+frontend/node_modules/
+node_modules/
+
+# Build outputs
+frontend/dist/
+frontend/build/
+dist/
+build/
+
+# Dependencies
+package-lock.json
+yarn.lock
+
+# Vite cache
+frontend/.vite/
+.vite/
+
+# ====================
+# DEVELOPMENT/DEBUG FILES
+# ====================
+
+# Debug and test scripts
+debug_*.js
+test_*.js
+test_*.go
+*_debug.*
+*_test_manual.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ====================
+# IDE & EDITOR FILES
+# ====================
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# GoLand/IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+
+# ====================
+# OS FILES
+# ====================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+
+# Linux
+*~
+
+# ====================
+# LOG FILES
+# ====================
+
+# Application logs
+*.log
+logs/
+log/
+
+# ====================
+# ENVIRONMENT & CONFIG
+# ====================
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local config
+config.local.*
+settings.local.*
+
+# ====================
+# MISC
+# ====================
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Archive files  
+*.tar.gz
+*.zip
+*.rar
+
+# Coverage reports
+coverage.out
+*.coverprofile
