@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 //  Call printReceipt(transaction, settings) to trigger window.print()
 // ─────────────────────────────────────────────────────────────────────────────
 
-const formatRp = (n) => 'Rp ' + Number(n).toLocaleString('id-ID');
+const formatRp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
 
 const formatDateTime = (d) => {
   const dt = new Date(d);
@@ -14,6 +14,36 @@ const formatDateTime = (d) => {
     hour: '2-digit', minute: '2-digit', second: '2-digit',
     hour12: false,
   }).replace(',', '');
+};
+
+// Helper function to calculate receipt breakdown
+const calculateReceiptTotals = (transaction, settings = {}) => {
+  const details = transaction.details || [];
+  
+  // Calculate raw subtotal from items
+  const itemSubtotal = details.reduce((sum, item) => sum + (item.subtotal || 0), 0);
+  
+  // Get values from transaction
+  const discountAmount = transaction.discount_amount || 0;
+  const ppnAmount = transaction.ppn_amount || 0;
+  const total = transaction.total_amount || 0;
+  
+  // Calculate subtotal after discount
+  const subtotalAfterDiscount = itemSubtotal - discountAmount;
+  
+  // Determine PPN mode
+  const ppnMode = settings.ppn_mode || 'exclusive';
+  const ppnPercent = settings.ppn_percent || 0;
+  
+  return {
+    itemSubtotal,           // subtotal before discount and tax
+    discountAmount,         // discount amount
+    subtotalAfterDiscount,  // subtotal after discount, before tax
+    ppnAmount,             // calculated tax amount
+    ppnPercent,            // tax percentage
+    ppnMode,               // 'inclusive' or 'exclusive'
+    total                  // final total
+  };
 };
 
 /**
@@ -47,6 +77,9 @@ export function printReceipt(transaction, settings = {}, paperWidth = '80mm') {
     const v   = bold ? `<b>${value}</b>` : value;
     return `<div class="row">${padRight(label, label.length)}${' '.repeat(Math.max(1,gap))}${v}</div>`;
   };
+  
+  // Calculate receipt totals
+  const totals = calculateReceiptTotals(transaction, settings);
 
   const receiptHTML = `<!DOCTYPE html>
 <html>
@@ -116,14 +149,16 @@ ${(transaction.details || []).map(d => `
 
 <div class="line"></div>
 
-${transaction.discount_amount > 0 ? `
-<div class="row"><span>Subtotal</span><span>${formatRp(transaction.total_amount + transaction.discount_amount)}</span></div>
-<div class="row"><span>Diskon (${transaction.discount_code})</span><span>- ${formatRp(transaction.discount_amount)}</span></div>
+<!-- Subtotal breakdown -->
+<div class="row"><span>Subtotal</span><span>${formatRp(totals.itemSubtotal)}</span></div>
+
+${totals.discountAmount > 0 ? `
+<div class="row"><span>Diskon (${transaction.discount_code || 'DISC'})</span><span>- ${formatRp(totals.discountAmount)}</span></div>
+<div class="row"><span>Subtotal stlh diskon</span><span>${formatRp(totals.subtotalAfterDiscount)}</span></div>
 ` : ''}
 
-${transaction.ppn_amount > 0 ? `
-<div class="row"><span>Subtotal</span><span>${formatRp((transaction.total_amount || 0) - (transaction.ppn_amount || 0))}</span></div>
-<div class="row"><span>PPN</span><span>${formatRp(transaction.ppn_amount)}</span></div>
+${totals.ppnAmount > 0 ? `
+<div class="row"><span>PPN ${totals.ppnPercent}% ${totals.ppnMode === 'inclusive' ? '(termasuk)' : ''}</span><span>${totals.ppnMode === 'inclusive' ? '' : '+ '}${formatRp(totals.ppnAmount)}</span></div>
 ` : ''}
 
 <div class="dline"></div>
@@ -193,6 +228,9 @@ export function ReceiptPreview({ transaction, settings = {}, paperWidth = '80mm'
 
   const fmt = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
   const isCancelled = transaction?.status === 'cancelled';
+  
+  // Calculate receipt totals
+  const totals = calculateReceiptTotals(transaction, settings);
 
   return (
     <div style={{
@@ -262,19 +300,22 @@ export function ReceiptPreview({ transaction, settings = {}, paperWidth = '80mm'
             ))}
 
             <div style={divider(1)} />
+            
+            {/* Totals breakdown */}
+            <ReceiptRow label="Subtotal" value={fmt(totals.itemSubtotal)} />
 
-            {transaction?.discount_amount > 0 && (
+            {totals.discountAmount > 0 && (
               <>
-                <ReceiptRow label="Subtotal" value={fmt((transaction?.total_amount||0) + (transaction?.discount_amount||0))} />
-                <ReceiptRow label={`Diskon (${transaction?.discount_code})`} value={'- '+fmt(transaction?.discount_amount)} />
+                <ReceiptRow label={`Diskon (${transaction?.discount_code || 'DISC'})`} value={'- '+fmt(totals.discountAmount)} />
+                <ReceiptRow label="Subtotal stlh diskon" value={fmt(totals.subtotalAfterDiscount)} />
               </>
             )}
 
-            {transaction?.ppn_amount > 0 && (
-              <>
-                <ReceiptRow label="Subtotal" value={fmt((transaction?.total_amount||0) - (transaction?.ppn_amount||0))} />
-                <ReceiptRow label="PPN" value={fmt(transaction?.ppn_amount)} />
-              </>
+            {totals.ppnAmount > 0 && (
+              <ReceiptRow 
+                label={`PPN ${totals.ppnPercent}%${totals.ppnMode === 'inclusive' ? ' (termasuk)' : ''}`} 
+                value={(totals.ppnMode === 'inclusive' ? '' : '+ ') + fmt(totals.ppnAmount)} 
+              />
             )}
 
             <div style={divider(2)} />

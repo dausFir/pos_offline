@@ -109,18 +109,31 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	// Penting #5: customer debt support
 	_ = req.CustomerID // TODO: implement customer debt support
 	_ = req.OnCredit   // TODO: implement credit transactions
-	totalAmount := subtotalBeforeDiscount - discountAmount
 
-	// PPN / Tax (tax-inclusive calculation)
-	// PPN sudah include dalam harga jual, jadi tidak ditambahkan ke total
+	subtotalAfterDiscount := subtotalBeforeDiscount - discountAmount
+
+	// PPN / Tax calculation with support for inclusive/exclusive mode
 	ppnPct := 0.0
 	if v := database.GetSetting("ppn_percent", "0"); v != "" {
 		fmt.Sscanf(v, "%f", &ppnPct)
 	}
+
+	ppnMode := database.GetSetting("ppn_mode", "exclusive") // default to exclusive
 	ppnAmount := 0.0
+	totalAmount := subtotalAfterDiscount
+
 	if ppnPct > 0 {
-		// Formula tax-inclusive: ppnAmount = totalAmount * ppnPct / (100 + ppnPct)
-		ppnAmount = totalAmount * ppnPct / (100 + ppnPct)
+		if ppnMode == "inclusive" {
+			// Tax inclusive: PPN sudah termasuk dalam harga
+			// ppnAmount = subtotalAfterDiscount * ppnPct / (100 + ppnPct)
+			ppnAmount = subtotalAfterDiscount * ppnPct / (100 + ppnPct)
+			// totalAmount tetap sama karena PPN sudah included
+			totalAmount = subtotalAfterDiscount
+		} else {
+			// Tax exclusive: PPN ditambahkan ke harga
+			ppnAmount = subtotalAfterDiscount * ppnPct / 100
+			totalAmount = subtotalAfterDiscount + ppnAmount
+		}
 	}
 
 	// Kritis #6: Split payment validation

@@ -63,21 +63,22 @@ export default function Settings() {
     } catch { toast.error('Gagal hapus gambar'); }
   };
 
-  const handleBackup = () => {
-    const token = localStorage.getItem('token');
-    const url = `/api/backup`;
-    // Trigger download with auth header via fetch
-    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob())
-      .then(blob => {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `backup_kasir_${new Date().toISOString().slice(0,10)}.zip`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        toast.success('Backup berhasil diunduh');
-      })
-      .catch(() => toast.error('Gagal backup database'));
+  const handleBackup = async () => {
+    try {
+      toast.success('Memulai backup database...');
+      const response = await api.get('/backup', { responseType: 'blob' });
+      
+      const blob = new Blob([response.data]);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `backup_kasir_${new Date().toISOString().slice(0,10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success('Backup berhasil diunduh');
+    } catch (err) {
+      console.error('Backup error:', err);
+      toast.error(err.response?.data?.error || 'Gagal backup database');
+    }
   };
 
   const handleRestore = async (e) => {
@@ -103,19 +104,34 @@ export default function Settings() {
     }
   };
 
-  const exportWithAuth = (path, filename) => {
-    const token = localStorage.getItem('token');
-    fetch(path, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.blob())
-      .then(blob => {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        toast.success('File berhasil diunduh');
-      })
-      .catch(() => toast.error('Gagal export data'));
+  const exportWithAuth = async (path, filename) => {
+    try {
+      toast.success('Memulai export data...');
+      const response = await api.get(path, { responseType: 'blob' });
+      
+      // Check if response is actually an error JSON (not CSV)
+      if (response.headers['content-type']?.includes('application/json')) {
+        // Parse JSON error from blob
+        const text = await response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.error || 'Export gagal');
+      }
+      
+      const blob = new Blob([response.data]);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success('File berhasil diunduh');
+    } catch (err) {
+      console.error('Export error:', err);
+      if (err.message?.includes('kadaluarsa') || err.message?.includes('expired')) {
+        toast.error('Session expired. Silakan login ulang dan coba lagi.');
+      } else {
+        toast.error(err.message || err.response?.data?.error || 'Gagal export data');
+      }
+    }
   };
 
   if (loading) return (
@@ -158,10 +174,47 @@ export default function Settings() {
                 value={settings.ppn_percent || 0}
                 onChange={e => setSettings(s => ({ ...s, ppn_percent: parseFloat(e.target.value) || 0 }))} />
               <span style={{ fontSize: 13, color: settings.ppn_percent > 0 ? '#1a7a3c' : 'var(--outline)', fontWeight: settings.ppn_percent > 0 ? 600 : 400 }}>
-                {settings.ppn_percent > 0 ? `✓ PPN ${settings.ppn_percent}% aktif — otomatis ditambah ke transaksi` : 'Isi 0 jika tidak ada PPN'}
+                {settings.ppn_percent > 0 ? `✓ PPN ${settings.ppn_percent}% aktif` : 'Isi 0 jika tidak ada PPN'}
               </span>
             </div>
           </div>
+          {settings.ppn_percent > 0 && (
+            <div className="input-group">
+              <label className="input-label">Mode Perhitungan PPN</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="ppn_mode"
+                    value="inclusive"
+                    checked={(settings.ppn_mode || 'exclusive') === 'inclusive'}
+                    onChange={e => setSettings(s => ({ ...s, ppn_mode: e.target.value }))}
+                  />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>Tax Inclusive (Harga sudah termasuk PPN)</div>
+                    <div style={{ fontSize: 12, color: 'var(--outline)' }}>
+                      PPN sudah termasuk dalam harga jual. PPN dipotong dari total, bukan ditambahkan.
+                    </div>
+                  </div>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="ppn_mode"
+                    value="exclusive"
+                    checked={(settings.ppn_mode || 'exclusive') === 'exclusive'}
+                    onChange={e => setSettings(s => ({ ...s, ppn_mode: e.target.value }))}
+                  />
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>Tax Exclusive (PPN dibebankan ke pembeli)</div>
+                    <div style={{ fontSize: 12, color: 'var(--outline)' }}>
+                      PPN ditambahkan ke harga jual. Total yang dibayar = Harga + PPN.
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
           <div className="input-group">
             <label className="input-label">Pesan Footer Struk</label>
             <input className="input" placeholder="cth: Terima kasih! Barang yang dibeli tidak dapat dikembalikan."

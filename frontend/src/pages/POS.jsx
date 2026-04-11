@@ -645,8 +645,29 @@ function CheckoutModal({ cart, total: rawTotal, onClose, onSuccess }) {
     api.get('/customers', { params: { limit: 200 } }).then(r => setCustomers(r.data.data || [])).catch(() => {});
   }, []);
 
-  const discAmt  = discountInfo?.discount_amount || 0;
-  const total    = rawTotal - discAmt;
+  const discAmt     = discountInfo?.discount_amount || 0;
+  
+  // Calculate totals with proper PPN logic
+  const subtotal = rawTotal;  // subtotal sebelum diskon dan PPN
+  const subtotalAfterDisc = subtotal - discAmt;  // subtotal setelah diskon
+  
+  let ppnAmt = 0;
+  let finalTotal = subtotalAfterDisc;
+  
+  if (storeSettings.ppn_percent > 0) {
+    if (storeSettings.ppn_mode === 'inclusive') {
+      // Tax inclusive: PPN sudah termasuk dalam harga
+      // PPN = subtotalAfterDisc * ppn% / (100 + ppn%)
+      ppnAmt = subtotalAfterDisc * storeSettings.ppn_percent / (100 + storeSettings.ppn_percent);
+      finalTotal = subtotalAfterDisc;  // total tetap sama karena PPN sudah included
+    } else {
+      // Tax exclusive (default): PPN ditambahkan ke harga  
+      ppnAmt = subtotalAfterDisc * storeSettings.ppn_percent / 100;
+      finalTotal = subtotalAfterDisc + ppnAmt;
+    }
+  }
+  
+  const total       = finalTotal;
   const paidNum  = parseFloat(paid) || 0;
   const cashNum  = parseFloat(cashAmt) || 0;
   const qrisNum  = parseFloat(qrisAmt) || 0;
@@ -730,15 +751,36 @@ function CheckoutModal({ cart, total: rawTotal, onClose, onSuccess }) {
                 <span className="mono" style={{ fontWeight: 600 }}>{formatRupiah((i.unitPrice ?? i.sell_price) * i.qty)}</span>
               </div>
             ))}
+            
+            {/* Subtotal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--outline-variant)' }}>
+              <span style={{ fontWeight: 600 }}>Subtotal</span>
+              <span className="mono" style={{ fontWeight: 600 }}>{formatRupiah(subtotal)}</span>
+            </div>
+            
             {discAmt > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', color: '#1a7a3c' }}>
                 <span>Diskon ({discountCode})</span><span className="mono" style={{ fontWeight: 700 }}>− {formatRupiah(discAmt)}</span>
               </div>
             )}
+            
+            {/* Subtotal after discount */}
+            {discAmt > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0' }}>
+                <span>Subtotal setelah diskon</span>
+                <span className="mono" style={{ fontWeight: 600 }}>{formatRupiah(subtotalAfterDisc)}</span>
+              </div>
+            )}
+            
             {storeSettings.ppn_percent > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 13 }}>
-                <span style={{ color: 'var(--on-surface-variant)' }}>PPN {storeSettings.ppn_percent}%</span>
-                <span className="mono" style={{ color: 'var(--on-surface-variant)' }}>{formatRupiah((rawTotal - discAmt) * storeSettings.ppn_percent / 100)}</span>
+                <span style={{ color: 'var(--on-surface-variant)' }}>
+                  PPN {storeSettings.ppn_percent}%
+                  {storeSettings.ppn_mode === 'inclusive' ? ' (termasuk)' : ' (ditambahkan)'}
+                </span>
+                <span className="mono" style={{ color: 'var(--on-surface-variant)' }}>
+                  {storeSettings.ppn_mode === 'inclusive' ? '' : '+ '}{formatRupiah(ppnAmt)}
+                </span>
               </div>
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 8, marginTop: 4 }}>
