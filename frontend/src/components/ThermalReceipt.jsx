@@ -16,6 +16,20 @@ const formatDateTime = (d) => {
   }).replace(',', '');
 };
 
+const getPaymentMethodDisplay = (method) => {
+  const methodMap = {
+    'cash': 'TUNAI',
+    'qris': 'QRIS',
+    'split': 'SPLIT',
+    'gopay': 'GOPAY',
+    'ovo': 'OVO',
+    'dana': 'DANA',
+    'linkaja': 'LINKAJA',
+    'shopeepay': 'SHOPEEPAY'
+  };
+  return methodMap[method] || method?.toUpperCase();
+};
+
 // Helper function to calculate receipt breakdown
 const calculateReceiptTotals = (transaction, settings = {}) => {
 
@@ -135,7 +149,7 @@ export function printReceipt(transaction, settings = {}, paperWidth = '80mm') {
 <div class="row"><span>No. Struk</span><span class="bold">${transaction.invoice_number}</span></div>
 <div class="row"><span>Tanggal</span><span>${formatDateTime(transaction.created_at)}</span></div>
 <div class="row"><span>Kasir</span><span>${transaction.username || '-'}</span></div>
-<div class="row"><span>Metode</span><span class="bold">${transaction.payment_method === 'cash' ? 'TUNAI' : 'QRIS'}</span></div>
+<div class="row"><span>Metode</span><span class="bold">${getPaymentMethodDisplay(transaction.payment_method)}</span></div>
 
 ${transaction.status === 'cancelled' ? `<div class="status-cancel">*** TRANSAKSI DIBATALKAN ***</div>` : ''}
 
@@ -173,6 +187,16 @@ ${totals.ppnPercent > 0 ? `
 </div>
 <div class="line"></div>
 <div class="row"><span>Bayar</span><span>${formatRp(transaction.payment_amount)}</span></div>
+
+${(['gopay','ovo','dana','linkaja','shopeepay'].includes(transaction.payment_method) && transaction.ewallet_amount) ? `
+<div class="row"><span>${getPaymentMethodDisplay(transaction.payment_method)}</span><span>${formatRp(transaction.ewallet_amount)}</span></div>
+` : ''}
+
+${transaction.payment_method === 'split' ? `
+${transaction.cash_amount > 0 ? `<div class="row"><span>Tunai</span><span>${formatRp(transaction.cash_amount)}</span></div>` : ''}
+${transaction.qris_amount > 0 ? `<div class="row"><span>QRIS</span><span>${formatRp(transaction.qris_amount)}</span></div>` : ''}
+` : ''}
+
 <div class="row"><span class="bold">Kembali</span><span class="bold">${formatRp(transaction.change_amount)}</span></div>
 <div class="dline"></div>
 
@@ -291,7 +315,7 @@ export function ReceiptPreview({ transaction, settings = {}, paperWidth = '80mm'
             <ReceiptRow label="Struk" value={transaction?.invoice_number || '-'} bold />
             <ReceiptRow label="Tgl" value={formatDateTime(transaction?.created_at)} />
             <ReceiptRow label="Kasir" value={transaction?.username || '-'} />
-            <ReceiptRow label="Metode" value={transaction?.payment_method === 'cash' ? 'TUNAI' : 'QRIS'} bold />
+            <ReceiptRow label="Metode" value={getPaymentMethodDisplay(transaction?.payment_method)} bold />
 
             {isCancelled && (
               <div style={{ background: '#000', color: '#fff', textAlign: 'center', padding: '3px', fontWeight: 800, letterSpacing: 2, margin: '4px 0', fontSize: 10 }}>
@@ -339,6 +363,20 @@ export function ReceiptPreview({ transaction, settings = {}, paperWidth = '80mm'
             </div>
             <div style={divider(1)} />
             <ReceiptRow label="Bayar" value={fmt(transaction?.payment_amount)} />
+
+            {/* E-wallet payment breakdown */}
+            {['gopay','ovo','dana','linkaja','shopeepay'].includes(transaction?.payment_method) && transaction?.ewallet_amount && (
+              <ReceiptRow label={getPaymentMethodDisplay(transaction.payment_method)} value={fmt(transaction.ewallet_amount)} />
+            )}
+
+            {/* Split payment breakdown */}
+            {transaction?.payment_method === 'split' && (
+              <>
+                {transaction?.cash_amount > 0 && <ReceiptRow label="Tunai" value={fmt(transaction.cash_amount)} />}
+                {transaction?.qris_amount > 0 && <ReceiptRow label="QRIS" value={fmt(transaction.qris_amount)} />}
+              </>
+            )}
+
             <ReceiptRow label="Kembali" value={fmt(transaction?.change_amount)} bold />
             <div style={divider(2)} />
 

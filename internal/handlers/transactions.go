@@ -30,9 +30,12 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Keranjang belanja kosong"})
 		return
 	}
-	validMethod := map[string]bool{"cash": true, "qris": true, "split": true}
+	validMethod := map[string]bool{
+		"cash": true, "qris": true, "split": true,
+		"gopay": true, "ovo": true, "dana": true, "linkaja": true, "shopeepay": true,
+	}
 	if !validMethod[req.PaymentMethod] {
-		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Metode pembayaran tidak valid (cash/qris/split)"})
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Metode pembayaran tidak valid"})
 		return
 	}
 
@@ -136,8 +139,12 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Kritis #6: Split payment validation
+	// Kritis #6: Split payment validation + E-wallet support
 	cashAmt, qrisAmt := req.CashAmount, req.QRISAmount
+	ewalletMethods := map[string]bool{
+		"gopay": true, "ovo": true, "dana": true, "linkaja": true, "shopeepay": true,
+	}
+
 	switch req.PaymentMethod {
 	case "cash":
 		cashAmt = req.PaymentAmount
@@ -161,8 +168,18 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.PaymentAmount = total
+	default:
+		// Handle e-wallet payments
+		if ewalletMethods[req.PaymentMethod] {
+			req.EwalletAmount = totalAmount
+			req.EwalletProvider = req.PaymentMethod
+			req.PaymentAmount = totalAmount
+			cashAmt = 0
+			qrisAmt = 0
+		}
 	}
 	changeAmount := req.PaymentAmount - totalAmount
+	// Only cash payments get change
 	if req.PaymentMethod != "cash" {
 		changeAmount = 0
 	}
@@ -190,10 +207,10 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[DEBUG] Inserting transaction - Invoice: %s, Total: %.2f, Payment: %.2f\n", invoice, totalAmount, req.PaymentAmount)
 	result, err := tx.Exec(
 		`INSERT INTO transactions
-		(invoice_number,user_id,customer_id,total_amount,payment_amount,change_amount,payment_method,cash_amount,qris_amount,
+		(invoice_number,user_id,customer_id,total_amount,payment_amount,change_amount,payment_method,cash_amount,qris_amount,ewallet_amount,ewallet_provider,
 		 discount_code,discount_amount,ppn_amount,on_credit,status,version,created_at,created_by,updated_at,updated_by)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		invoice, claims.UserID, custID, totalAmount, req.PaymentAmount, changeAmount, req.PaymentMethod, cashAmt, qrisAmt,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		invoice, claims.UserID, custID, totalAmount, req.PaymentAmount, changeAmount, req.PaymentMethod, cashAmt, qrisAmt, req.EwalletAmount, req.EwalletProvider,
 		discountCode, discountAmount, ppnAmount, onCreditVal, "completed", 1, now, claims.UserID, now, claims.UserID,
 	)
 	if err != nil {
@@ -262,6 +279,7 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			ID: txID, InvoiceNumber: invoice, UserID: claims.UserID, Username: claims.Username,
 			TotalAmount: totalAmount, PaymentAmount: req.PaymentAmount, ChangeAmount: changeAmount,
 			PaymentMethod: req.PaymentMethod, CashAmount: cashAmt, QRISAmount: qrisAmt,
+			EwalletAmount: req.EwalletAmount, EwalletProvider: req.EwalletProvider,
 			DiscountCode: discountCode, DiscountAmount: discountAmount, Status: "completed", Details: txDetails,
 			AuditFields: models.AuditFields{Version: 1, CreatedAt: now, UpdatedAt: now},
 		},
@@ -392,6 +410,7 @@ func GetTransactions(w http.ResponseWriter, r *http.Request) {
 	q := `SELECT t.id, t.invoice_number, t.user_id, COALESCE(u.username,'?'),
 		t.total_amount, t.payment_amount, t.change_amount, t.payment_method,
 		COALESCE(t.cash_amount,0), COALESCE(t.qris_amount,0),
+		COALESCE(t.ewallet_amount,0), COALESCE(t.ewallet_provider,''),
 		COALESCE(t.discount_code,''), COALESCE(t.discount_amount,0), COALESCE(t.ppn_amount,0),
 		t.status, COALESCE(t.cancel_reason,''),
 		t.version, t.created_at, t.updated_at ` + base + " ORDER BY t.created_at DESC LIMIT ? OFFSET ?"
@@ -410,6 +429,7 @@ func GetTransactions(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&t.ID, &t.InvoiceNumber, &t.UserID, &t.Username,
 			&t.TotalAmount, &t.PaymentAmount, &t.ChangeAmount, &t.PaymentMethod,
 			&t.CashAmount, &t.QRISAmount,
+			&t.EwalletAmount, &t.EwalletProvider,
 			&t.DiscountCode, &t.DiscountAmount, &t.PPNAmount, &t.Status, &t.CancelReason,
 			&t.AuditFields.Version, &t.AuditFields.CreatedAt, &t.AuditFields.UpdatedAt)
 		list = append(list, t)
@@ -427,6 +447,7 @@ func GetTransaction(w http.ResponseWriter, r *http.Request) {
 		`SELECT t.id, t.invoice_number, t.user_id, COALESCE(u.username,'?'),
 		t.total_amount, t.payment_amount, t.change_amount, t.payment_method,
 		COALESCE(t.cash_amount,0), COALESCE(t.qris_amount,0),
+		COALESCE(t.ewallet_amount,0), COALESCE(t.ewallet_provider,''),
 		COALESCE(t.discount_code,''), COALESCE(t.discount_amount,0), COALESCE(t.ppn_amount,0),
 		t.status, COALESCE(t.cancel_reason,''),
 		t.version, t.created_at, t.updated_at
@@ -435,6 +456,7 @@ func GetTransaction(w http.ResponseWriter, r *http.Request) {
 	).Scan(&t.ID, &t.InvoiceNumber, &t.UserID, &t.Username,
 		&t.TotalAmount, &t.PaymentAmount, &t.ChangeAmount, &t.PaymentMethod,
 		&t.CashAmount, &t.QRISAmount,
+		&t.EwalletAmount, &t.EwalletProvider,
 		&t.DiscountCode, &t.DiscountAmount, &t.PPNAmount, &t.Status, &t.CancelReason,
 		&t.AuditFields.Version, &t.AuditFields.CreatedAt, &t.AuditFields.UpdatedAt)
 	if err != nil {

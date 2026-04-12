@@ -402,6 +402,192 @@ export default function Settings() {
         </div>
       </section>
 
+      {/* ── Payment Gateway ─────────────────────────────────────────────────── */}
+      <section className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid var(--outline-variant)' }}>
+          <Icon name="credit_card" size={18} color="var(--primary)" />
+          <h2 style={{ fontSize: 15, fontWeight: 700 }}>Payment Gateway (Opsional)</h2>
+        </div>
+        
+        {/* Enable/Disable Toggle */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={settings.payment_gateway_enabled || false}
+              onChange={e => setSettings(s => ({ ...s, payment_gateway_enabled: e.target.checked }))}
+              style={{ transform: 'scale(1.2)' }}
+            />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Aktifkan Payment Gateway</div>
+              <div style={{ fontSize: 12, color: 'var(--outline)' }}>
+                Integrasi dengan e-wallet (GoPay, OVO, DANA, dll) dan kartu kredit/debit
+              </div>
+            </div>
+          </label>
+        </div>
+
+        {settings.payment_gateway_enabled && (
+          <div style={{ animation: 'fadeIn 0.3s ease-in' }}>
+            {/* Provider Selection */}
+            <div className="input-group" style={{ marginBottom: 20 }}>
+              <label className="input-label">Provider Payment Gateway</label>
+              <select 
+                className="input"
+                value={settings.payment_provider || 'manual'}
+                onChange={e => setSettings(s => ({ ...s, payment_provider: e.target.value }))}
+              >
+                <option value="manual">Manual QRIS Only</option>
+                <option value="xendit">Xendit</option>
+                <option value="midtrans">Midtrans</option>
+              </select>
+              <div style={{ fontSize: 12, color: 'var(--outline)', marginTop: 6 }}>
+                {settings.payment_provider === 'xendit' && '🟢 Xendit - Support GoPay, OVO, DANA, LinkAja, ShopeePay, Cards'}
+                {settings.payment_provider === 'midtrans' && '🟢 Midtrans - Support semua e-wallet + kartu kredit/debit'}
+                {settings.payment_provider === 'manual' && 'ℹ️ Hanya QRIS manual yang diupload di section atas'}
+              </div>
+            </div>
+
+            {/* Xendit Configuration */}
+            {settings.payment_provider === 'xendit' && (
+              <div style={{ padding: 16, background: 'rgba(59, 130, 246, 0.05)', borderRadius: 8, border: '1px solid rgba(59, 130, 246, 0.15)', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Icon name="api" size={16} color="#3b82f6" />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#3b82f6' }}>Konfigurasi Xendit</span>
+                </div>
+                
+                <div style={{ display: 'grid', gap: 14 }}>
+                  <div className="input-group">
+                    <label className="input-label">API Key (Secret Key)</label>
+                    <input 
+                      type="password"
+                      className="input"
+                      placeholder="xnd_development_xxx atau xnd_production_xxx"
+                      value={settings.xendit_api_key || ''}
+                      onChange={e => setSettings(s => ({ ...s, xendit_api_key: e.target.value }))}
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Public Key</label>
+                    <input 
+                      className="input"
+                      placeholder="xnd_public_development_xxx atau xnd_public_production_xxx"
+                      value={settings.xendit_public_key || ''}
+                      onChange={e => setSettings(s => ({ ...s, xendit_public_key: e.target.value }))}
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Webhook URL (Opsional)</label>
+                    <input 
+                      className="input"
+                      placeholder="https://yourdomain.com/webhooks/xendit"
+                      value={settings.xendit_webhook || ''}
+                      onChange={e => setSettings(s => ({ ...s, xendit_webhook: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Midtrans Configuration */}
+            {settings.payment_provider === 'midtrans' && (
+              <div style={{ padding: 16, background: 'rgba(34, 197, 94, 0.05)', borderRadius: 8, border: '1px solid rgba(34, 197, 94, 0.15)', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Icon name="api" size={16} color="#22c55e" />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: '#22c55e' }}>Konfigurasi Midtrans</span>
+                </div>
+                
+                <div style={{ display: 'grid', gap: 14 }}>
+                  <div className="input-group">
+                    <label className="input-label">Server Key</label>
+                    <input 
+                      type="password"
+                      className="input"
+                      placeholder="SB-Mid-server-xxx (sandbox) atau Mid-server-xxx (production)"
+                      value={settings.midtrans_server_key || ''}
+                      onChange={e => setSettings(s => ({ ...s, midtrans_server_key: e.target.value }))}
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Client Key</label>
+                    <input 
+                      className="input"
+                      placeholder="SB-Mid-client-xxx (sandbox) atau Mid-client-xxx (production)"
+                      value={settings.midtrans_client_key || ''}
+                      onChange={e => setSettings(s => ({ ...s, midtrans_client_key: e.target.value }))}
+                    />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={settings.midtrans_sandbox || false}
+                        onChange={e => setSettings(s => ({ ...s, midtrans_sandbox: e.target.checked }))}
+                      />
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>Mode Sandbox (Testing)</div>
+                        <div style={{ fontSize: 12, color: 'var(--outline)' }}>
+                          Uncheck jika menggunakan production keys
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* E-wallet Selection */}
+            {(settings.payment_provider === 'xendit' || settings.payment_provider === 'midtrans') && (
+              <div style={{ padding: 16, background: 'var(--surface-container-low)', borderRadius: 8, border: '1px solid var(--outline-variant)' }}>
+                <div style={{ marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>E-wallet yang Diaktifkan</h3>
+                  <p style={{ fontSize: 12, color: 'var(--outline)' }}>Pilih metode pembayaran yang akan tersedia di POS</p>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  {[
+                    { key: 'enable_gopay', label: 'GoPay', icon: '🟢', desc: 'Gojek ecosystem' },
+                    { key: 'enable_ovo', label: 'OVO', icon: '🟣', desc: 'Grab ecosystem' },
+                    { key: 'enable_dana', label: 'DANA', icon: '🔵', desc: 'Ant Financial' },
+                    { key: 'enable_linkaja', label: 'LinkAja', icon: '🔴', desc: 'Telkomsel ecosystem' },
+                    { key: 'enable_shopee_pay', label: 'ShopeePay', icon: '🟠', desc: 'Shopee ecosystem' },
+                  ].map(wallet => (
+                    <label key={wallet.key} style={{ 
+                      display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                      padding: 12, borderRadius: 8, border: '1px solid var(--outline-variant)',
+                      backgroundColor: settings[wallet.key] ? 'rgba(34, 197, 94, 0.05)' : 'transparent',
+                      borderColor: settings[wallet.key] ? 'rgba(34, 197, 94, 0.2)' : 'var(--outline-variant)'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={settings[wallet.key] || false}
+                        onChange={e => setSettings(s => ({ ...s, [wallet.key]: e.target.checked }))}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{wallet.icon}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>{wallet.label}</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--outline)' }}>{wallet.desc}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Configuration Tips */}
+            <div style={{ padding: 12, background: 'rgba(249,115,22,0.05)', borderRadius: 8, border: '1px solid rgba(249,115,22,0.15)', fontSize: 12, color: 'var(--outline)', lineHeight: 1.7, marginTop: 16 }}>
+              <strong style={{ color: 'var(--primary)' }}>💡 Setup Instructions:</strong><br />
+              • <strong>Xendit:</strong> <a href="https://dashboard.xendit.co" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>dashboard.xendit.co</a> → Settings → API Keys<br />
+              • <strong>Midtrans:</strong> <a href="https://dashboard.midtrans.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>dashboard.midtrans.com</a> → Settings → Access Keys<br />
+              • Pastikan webhook URL sudah dikonfigurasi di dashboard provider untuk notifikasi pembayaran<br />
+              • Test dengan mode sandbox terlebih dahulu sebelum production
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Save button */}
       <div style={{ marginBottom: 24 }}>
         <button className="btn btn-primary btn-lg" onClick={handleSaveSettings} disabled={saving}>

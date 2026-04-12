@@ -124,7 +124,7 @@ func createTables() error {
 		total_amount    REAL     NOT NULL,
 		payment_amount  REAL     NOT NULL,
 		change_amount   REAL     NOT NULL,
-		payment_method  TEXT     NOT NULL CHECK(payment_method IN ('cash','qris','split')),
+		payment_method  TEXT     NOT NULL CHECK(payment_method IN ('cash','qris','split','gopay','ovo','dana','linkaja','shopeepay')),
 		cash_amount     REAL     NOT NULL DEFAULT 0,
 		qris_amount     REAL     NOT NULL DEFAULT 0,
 		discount_code   TEXT     NOT NULL DEFAULT '',
@@ -279,6 +279,9 @@ func runMigrations() error {
 		`ALTER TABLE discounts ADD COLUMN deleted_by INTEGER REFERENCES users(id)`,
 		// stock_mutations ref_id
 		`ALTER TABLE stock_mutations ADD COLUMN ref_id INTEGER`,
+		// e-wallet payment support
+		`ALTER TABLE transactions ADD COLUMN ewallet_amount REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE transactions ADD COLUMN ewallet_provider TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, s := range stmts {
 		DB.Exec(s) // ignore duplicate-column errors

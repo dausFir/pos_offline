@@ -14,6 +14,13 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 	if v := database.GetSetting("ppn_percent", "0"); v != "" {
 		fmt.Sscanf(v, "%f", &ppn)
 	}
+
+	// Parse boolean values
+	parseBool := func(key, defaultVal string) bool {
+		val := database.GetSetting(key, defaultVal)
+		return val == "true"
+	}
+
 	settings := models.AppSettings{
 		StoreName:     database.GetSetting("store_name", "Toko Saya"),
 		StoreAddress:  database.GetSetting("store_address", ""),
@@ -23,6 +30,27 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 		PPNPercent:    ppn,
 		PPNMode:       database.GetSetting("ppn_mode", "exclusive"),
 		ReceiptFooter: database.GetSetting("receipt_footer", "Terima kasih atas kunjungan Anda!"),
+
+		// Payment Gateway Configuration
+		PaymentGatewayEnabled: parseBool("payment_gateway_enabled", "false"),
+		PaymentProvider:       database.GetSetting("payment_provider", "manual"),
+
+		// Xendit Configuration (only show if provider is xendit)
+		XenditAPIKey:    database.GetSetting("xendit_api_key", ""),
+		XenditPublicKey: database.GetSetting("xendit_public_key", ""),
+		XenditWebhook:   database.GetSetting("xendit_webhook", ""),
+
+		// Midtrans Configuration (only show if provider is midtrans)
+		MidtransServerKey: database.GetSetting("midtrans_server_key", ""),
+		MidtransClientKey: database.GetSetting("midtrans_client_key", ""),
+		MidtransSandbox:   parseBool("midtrans_sandbox", "true"),
+
+		// E-wallet Settings
+		EnableGopay:     parseBool("enable_gopay", "false"),
+		EnableOvo:       parseBool("enable_ovo", "false"),
+		EnableDana:      parseBool("enable_dana", "false"),
+		EnableLinkAja:   parseBool("enable_linkaja", "false"),
+		EnableShopeePay: parseBool("enable_shopee_pay", "false"),
 	}
 	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: settings})
 }
@@ -44,6 +72,23 @@ func UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		req.PPNMode = "exclusive"
 	}
 
+	// Validate payment provider
+	if req.PaymentProvider != "" && req.PaymentProvider != "manual" && req.PaymentProvider != "xendit" && req.PaymentProvider != "midtrans" {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "payment_provider harus 'manual', 'xendit', atau 'midtrans'"})
+		return
+	}
+	if req.PaymentProvider == "" {
+		req.PaymentProvider = "manual"
+	}
+
+	// Helper function to convert bool to string
+	boolToString := func(b bool) string {
+		if b {
+			return "true"
+		}
+		return "false"
+	}
+
 	pairs := map[string]string{
 		"store_name":     req.StoreName,
 		"store_address":  req.StoreAddress,
@@ -51,6 +96,27 @@ func UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		"ppn_percent":    fmt.Sprintf("%g", req.PPNPercent),
 		"ppn_mode":       req.PPNMode,
 		"receipt_footer": req.ReceiptFooter,
+
+		// Payment Gateway Settings
+		"payment_gateway_enabled": boolToString(req.PaymentGatewayEnabled),
+		"payment_provider":        req.PaymentProvider,
+
+		// Xendit Configuration
+		"xendit_api_key":    req.XenditAPIKey,
+		"xendit_public_key": req.XenditPublicKey,
+		"xendit_webhook":    req.XenditWebhook,
+
+		// Midtrans Configuration
+		"midtrans_server_key": req.MidtransServerKey,
+		"midtrans_client_key": req.MidtransClientKey,
+		"midtrans_sandbox":    boolToString(req.MidtransSandbox),
+
+		// E-wallet Settings
+		"enable_gopay":      boolToString(req.EnableGopay),
+		"enable_ovo":        boolToString(req.EnableOvo),
+		"enable_dana":       boolToString(req.EnableDana),
+		"enable_linkaja":    boolToString(req.EnableLinkAja),
+		"enable_shopee_pay": boolToString(req.EnableShopeePay),
 	}
 	if req.LogoImageB64 != "" {
 		pairs["logo_image_b64"] = req.LogoImageB64

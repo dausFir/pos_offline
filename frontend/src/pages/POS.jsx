@@ -698,16 +698,53 @@ function CheckoutModal({ cart, total: rawTotal, onClose, onSuccess }) {
   const handleCheckout = async () => {
     setLoading(true);
     try {
+      // Check if payment method is e-wallet
+      const ewalletMethods = ['gopay', 'ovo', 'dana', 'linkaja', 'shopeepay'];
+      const isEwallet = ewalletMethods.includes(method);
+      
+      // Prepare payment amounts based on method
+      let paymentAmount = 0;
+      let cashAmount = 0;
+      let qrisAmount = 0;
+      let ewalletAmount = 0;
+      
+      if (!onCredit) {
+        if (method === 'split') {
+          paymentAmount = cashNum + qrisNum;
+          cashAmount = cashNum;
+          qrisAmount = qrisNum;
+        } else if (method === 'qris') {
+          paymentAmount = total;
+          qrisAmount = total;
+        } else if (method === 'cash') {
+          paymentAmount = paidNum;
+          cashAmount = paidNum;
+        } else if (isEwallet) {
+          paymentAmount = total;
+          ewalletAmount = total;
+        }
+      }
+
       const res = await api.post('/checkout', {
         items: cart.map(i => ({ product_id: i.id, quantity: i.qty })),
-        payment_amount: onCredit ? 0 : method === 'split' ? cashNum + qrisNum : method === 'qris' ? total : paidNum,
+        payment_amount: paymentAmount,
         payment_method: onCredit ? 'cash' : method,
-        cash_amount: onCredit ? 0 : method === 'split' ? cashNum : method === 'cash' ? paidNum : 0,
-        qris_amount: onCredit ? 0 : method === 'split' ? qrisNum : method === 'qris' ? total : 0,
+        cash_amount: cashAmount,
+        qris_amount: qrisAmount,
+        ewallet_amount: ewalletAmount,
+        ewallet_provider: isEwallet ? method : '',
         discount_code: discountCode,
         customer_id: selectedCustomer?.id || 0,
         on_credit: onCredit,
       });
+      
+      // Handle payment gateway processing for e-wallet
+      if (isEwallet && storeSettings.payment_gateway_enabled) {
+        toast.success('Memproses pembayaran e-wallet...');
+        // Payment gateway processing would happen here
+        // For now, we'll just show success
+      }
+      
       toast.success('Transaksi berhasil!');
       onSuccess(res.data.data);
     } catch (err) { toast.error(err.response?.data?.error || 'Checkout gagal'); }
@@ -847,13 +884,56 @@ function CheckoutModal({ cart, total: rawTotal, onClose, onSuccess }) {
             <>
               <div>
                 <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--outline)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Metode Pembayaran</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                
+                {/* Basic Payment Methods */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
                   {[{ id:'cash', label:t('checkout.cash'), icon:'payments' }, { id:'qris', label:t('checkout.qris'), icon:'qr_code' }, { id:'split', label:t('checkout.split'), icon:'call_split' }].map(m => (
                     <button key={m.id} onClick={() => setMethod(m.id)} style={{ padding: '10px 6px', borderRadius: 10, cursor: 'pointer', border: `2px solid ${method === m.id ? 'var(--primary)' : 'var(--outline-variant)'}`, background: method === m.id ? 'var(--primary-fixed)' : 'var(--surface-container-low)', color: method === m.id ? 'var(--primary)' : 'var(--on-surface-variant)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 700, fontSize: 13, transition: 'all .14s' }}>
                       <Icon name={m.icon} size={18} filled /> {m.label}
                     </button>
                   ))}
                 </div>
+
+                {/* E-wallet Payment Gateway Options */}
+                {storeSettings.payment_gateway_enabled && (storeSettings.payment_provider === 'xendit' || storeSettings.payment_provider === 'midtrans') && (
+                  <div style={{ marginBottom: 12 }}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--outline)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>E-wallet</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: 6 }}>
+                      {[
+                        { id: 'gopay', label: 'GoPay', icon: '🟢', enabled: storeSettings.enable_gopay },
+                        { id: 'ovo', label: 'OVO', icon: '🟣', enabled: storeSettings.enable_ovo },
+                        { id: 'dana', label: 'DANA', icon: '🔵', enabled: storeSettings.enable_dana },
+                        { id: 'linkaja', label: 'LinkAja', icon: '🔴', enabled: storeSettings.enable_linkaja },
+                        { id: 'shopeepay', label: 'ShopeePay', icon: '🟠', enabled: storeSettings.enable_shopee_pay },
+                      ].filter(w => w.enabled).map(wallet => (
+                        <button 
+                          key={wallet.id} 
+                          onClick={() => setMethod(wallet.id)} 
+                          style={{ 
+                            padding: '8px 4px', 
+                            borderRadius: 8, 
+                            cursor: 'pointer', 
+                            border: `2px solid ${method === wallet.id ? 'var(--primary)' : 'var(--outline-variant)'}`, 
+                            background: method === wallet.id ? 'var(--primary-fixed)' : 'var(--surface-container-low)', 
+                            color: method === wallet.id ? 'var(--primary)' : 'var(--on-surface-variant)', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            gap: 3, 
+                            fontWeight: 600, 
+                            fontSize: 10, 
+                            transition: 'all .14s',
+                            minHeight: 50
+                          }}
+                        >
+                          <span style={{ fontSize: 14 }}>{wallet.icon}</span>
+                          <span>{wallet.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Cash */}

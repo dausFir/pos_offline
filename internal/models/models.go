@@ -58,22 +58,24 @@ type Product struct {
 }
 
 type Transaction struct {
-	ID             int64               `json:"id"`
-	InvoiceNumber  string              `json:"invoice_number"`
-	UserID         int64               `json:"user_id"`
-	Username       string              `json:"username,omitempty"`
-	TotalAmount    float64             `json:"total_amount"`
-	PaymentAmount  float64             `json:"payment_amount"`
-	ChangeAmount   float64             `json:"change_amount"`
-	PaymentMethod  string              `json:"payment_method"` // cash | qris | split
-	CashAmount     float64             `json:"cash_amount"`    // Kritis #6: split
-	QRISAmount     float64             `json:"qris_amount"`
-	DiscountCode   string              `json:"discount_code,omitempty"`
-	DiscountAmount float64             `json:"discount_amount"`
-	PPNAmount      float64             `json:"ppn_amount"` // PPN/tax amount
-	Status         string              `json:"status"`
-	CancelReason   string              `json:"cancel_reason,omitempty"`
-	Details        []TransactionDetail `json:"details,omitempty"`
+	ID              int64               `json:"id"`
+	InvoiceNumber   string              `json:"invoice_number"`
+	UserID          int64               `json:"user_id"`
+	Username        string              `json:"username,omitempty"`
+	TotalAmount     float64             `json:"total_amount"`
+	PaymentAmount   float64             `json:"payment_amount"`
+	ChangeAmount    float64             `json:"change_amount"`
+	PaymentMethod   string              `json:"payment_method"` // cash | qris | split | gopay | ovo | dana | linkaja | shopeepay
+	CashAmount      float64             `json:"cash_amount"`    // Kritis #6: split
+	QRISAmount      float64             `json:"qris_amount"`
+	EwalletAmount   float64             `json:"ewallet_amount"`   // Amount paid via e-wallet
+	EwalletProvider string              `json:"ewallet_provider"` // gopay, ovo, dana, linkaja, shopeepay
+	DiscountCode    string              `json:"discount_code,omitempty"`
+	DiscountAmount  float64             `json:"discount_amount"`
+	PPNAmount       float64             `json:"ppn_amount"` // PPN/tax amount
+	Status          string              `json:"status"`
+	CancelReason    string              `json:"cancel_reason,omitempty"`
+	Details         []TransactionDetail `json:"details,omitempty"`
 	AuditFields
 }
 
@@ -160,6 +162,27 @@ type AppSettings struct {
 	PPNPercent    float64 `json:"ppn_percent"` // 0 = no tax
 	PPNMode       string  `json:"ppn_mode"`    // "inclusive" | "exclusive"
 	ReceiptFooter string  `json:"receipt_footer"`
+
+	// Payment Gateway Configuration
+	PaymentGatewayEnabled bool   `json:"payment_gateway_enabled"`
+	PaymentProvider       string `json:"payment_provider"` // "xendit", "midtrans", "manual"
+
+	// Xendit Configuration
+	XenditAPIKey    string `json:"xendit_api_key,omitempty"`
+	XenditPublicKey string `json:"xendit_public_key,omitempty"`
+	XenditWebhook   string `json:"xendit_webhook,omitempty"`
+
+	// Midtrans Configuration
+	MidtransServerKey string `json:"midtrans_server_key,omitempty"`
+	MidtransClientKey string `json:"midtrans_client_key,omitempty"`
+	MidtransSandbox   bool   `json:"midtrans_sandbox,omitempty"`
+
+	// E-wallet Settings
+	EnableGopay     bool `json:"enable_gopay"`
+	EnableOvo       bool `json:"enable_ovo"`
+	EnableDana      bool `json:"enable_dana"`
+	EnableLinkAja   bool `json:"enable_linkaja"`
+	EnableShopeePay bool `json:"enable_shopee_pay"`
 }
 
 // ── Requests ──────────────────────────────────────────────────────────────────
@@ -272,6 +295,27 @@ type SettingsRequest struct {
 	PPNPercent    float64 `json:"ppn_percent"`
 	PPNMode       string  `json:"ppn_mode"`
 	ReceiptFooter string  `json:"receipt_footer"`
+
+	// Payment Gateway Configuration
+	PaymentGatewayEnabled bool   `json:"payment_gateway_enabled"`
+	PaymentProvider       string `json:"payment_provider"` // "xendit", "midtrans", "manual"
+
+	// Xendit Configuration
+	XenditAPIKey    string `json:"xendit_api_key,omitempty"`
+	XenditPublicKey string `json:"xendit_public_key,omitempty"`
+	XenditWebhook   string `json:"xendit_webhook,omitempty"`
+
+	// Midtrans Configuration
+	MidtransServerKey string `json:"midtrans_server_key,omitempty"`
+	MidtransClientKey string `json:"midtrans_client_key,omitempty"`
+	MidtransSandbox   bool   `json:"midtrans_sandbox,omitempty"`
+
+	// E-wallet Settings
+	EnableGopay     bool `json:"enable_gopay"`
+	EnableOvo       bool `json:"enable_ovo"`
+	EnableDana      bool `json:"enable_dana"`
+	EnableLinkAja   bool `json:"enable_linkaja"`
+	EnableShopeePay bool `json:"enable_shopee_pay"`
 }
 
 type APIResponse struct {
@@ -420,12 +464,14 @@ type ImportResult struct {
 
 // ── Extended checkout for customer + credit ───────────────────────────────────
 type CheckoutRequestV3 struct {
-	Items         []CheckoutItem `json:"items"`
-	PaymentAmount float64        `json:"payment_amount"`
-	PaymentMethod string         `json:"payment_method"`
-	CashAmount    float64        `json:"cash_amount"`
-	QRISAmount    float64        `json:"qris_amount"`
-	DiscountCode  string         `json:"discount_code"`
-	CustomerID    int64          `json:"customer_id"`
-	OnCredit      bool           `json:"on_credit"` // bayar nanti (hutang)
+	Items           []CheckoutItem `json:"items"`
+	PaymentAmount   float64        `json:"payment_amount"`
+	PaymentMethod   string         `json:"payment_method"`
+	CashAmount      float64        `json:"cash_amount"`
+	QRISAmount      float64        `json:"qris_amount"`
+	EwalletAmount   float64        `json:"ewallet_amount"`   // Amount paid via e-wallet
+	EwalletProvider string         `json:"ewallet_provider"` // gopay, ovo, dana, linkaja, shopeepay
+	DiscountCode    string         `json:"discount_code"`
+	CustomerID      int64          `json:"customer_id"`
+	OnCredit        bool           `json:"on_credit"` // bayar nanti (hutang)
 }
