@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import api, { formatRupiah } from '../utils/api';
 import toast from 'react-hot-toast';
 import { printReceipt, ReceiptPreview } from '../components/ThermalReceipt';
@@ -1018,32 +1019,206 @@ function ReceiptSuccessModal({ transaction, onClose }) {
   );
 }
 
+/* ── BarcodeScanner Component ─────────────────────────────────────────────── */
+function BarcodeScanner({ onScan, onError }) {
+  const scannerRef = useRef(null);
+  const html5QrcodeScannerRef = useRef(null);
+
+  useEffect(() => {
+    if (!scannerRef.current) return;
+
+    const html5QrcodeScanner = new Html5QrcodeScanner(
+      "barcode-scanner", 
+      { 
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+        showTorchButtonIfSupported: true,
+        showZoomSliderIfSupported: true,
+        defaultZoomValueIfSupported: 2,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      },
+      false
+    );
+
+    html5QrcodeScannerRef.current = html5QrcodeScanner;
+
+    const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+      if (onScan) {
+        onScan(decodedText);
+      }
+    };
+
+    const qrCodeErrorCallback = (errorMessage) => {
+      // Silently ignore frequent scanning errors
+    };
+
+    html5QrcodeScanner.render(qrCodeSuccessCallback, qrCodeErrorCallback);
+
+    // Apply custom styles after render
+    setTimeout(() => {
+      const scannerElement = document.getElementById('barcode-scanner');
+      if (scannerElement) {
+        // Style video element
+        const video = scannerElement.querySelector('video');
+        if (video) {
+          video.style.borderRadius = '8px';
+          video.style.width = '100%';
+          video.style.height = 'auto';
+        }
+        
+        // Style buttons
+        const buttons = scannerElement.querySelectorAll('button');
+        buttons.forEach(button => {
+          button.style.background = 'var(--primary)';
+          button.style.color = 'white';
+          button.style.border = 'none';
+          button.style.borderRadius = '6px';
+          button.style.padding = '8px 16px';
+          button.style.margin = '4px';
+          button.style.fontSize = '12px';
+          button.style.fontFamily = 'inherit';
+        });
+
+        // Style select elements
+        const selects = scannerElement.querySelectorAll('select');
+        selects.forEach(select => {
+          select.style.background = 'var(--surface-container)';
+          select.style.border = '1px solid var(--outline-variant)';
+          select.style.borderRadius = '6px';
+          select.style.padding = '4px 8px';
+          select.style.margin = '4px';
+          select.style.fontFamily = 'inherit';
+        });
+      }
+    }, 100);
+
+    return () => {
+      if (html5QrcodeScannerRef.current) {
+        html5QrcodeScannerRef.current.clear().catch((err) => {
+          // Silent cleanup
+        });
+      }
+    };
+  }, [onScan, onError]);
+
+  return <div id="barcode-scanner" ref={scannerRef}></div>;
+}
+
 /* ── ScannerModal ─────────────────────────────────────────────────────────── */
 function ScannerModal({ onScan, onClose }) {
   const [code, setCode] = useState('');
+  const [mode, setMode] = useState('camera'); // 'camera' or 'manual'
+  const [isScanning, setIsScanning] = useState(false);
+
+  const handleScanSuccess = (scannedCode) => {
+    onScan(scannedCode);
+  };
+
+  const toggleMode = () => {
+    setMode(mode === 'camera' ? 'manual' : 'camera');
+    setIsScanning(false);
+  };
+
+  useEffect(() => {
+    if (mode === 'camera') {
+      setIsScanning(true);
+    }
+  }, [mode]);
+
   return (
     <div className="modal-overlay">
-      <div className="modal">
+      <div className="modal" style={{ maxWidth: mode === 'camera' ? '500px' : '400px' }}>
         <div className="modal-header">
           <span className="modal-title">Scanner Barcode</span>
-          <button className="icon-btn" onClick={onClose}><Icon name="close" size={18} /></button>
-        </div>
-        <div className="modal-body">
-          <div style={{ background: 'var(--surface-container-low)', borderRadius: 12, padding: 28, textAlign: 'center', marginBottom: 14, border: '2px dashed var(--outline-variant)' }}>
-            <Icon name="qr_code_scanner" size={48} color="var(--primary)" />
-            <p style={{ fontSize: 12, color: 'var(--outline)', lineHeight: 1.6 }}>Klik kolom di bawah, lalu scan atau ketik barcode</p>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button 
+              className="btn btn-ghost" 
+              style={{ padding: '4px 12px', fontSize: '12px' }}
+              onClick={toggleMode}
+            >
+              <Icon name={mode === 'camera' ? 'keyboard' : 'camera'} size={14} />
+              {mode === 'camera' ? 'Manual' : 'Camera'}
+            </button>
+            <button className="icon-btn" onClick={onClose}>
+              <Icon name="close" size={18} />
+            </button>
           </div>
-          <input className="input mono" style={{ fontSize: 18, letterSpacing: 2 }}
-            placeholder="Scan atau ketik barcode..." value={code}
-            onChange={e => setCode(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && code.trim()) onScan(code.trim()); }}
-            autoFocus />
         </div>
+        
+        <div className="modal-body">
+          {mode === 'camera' ? (
+            <div>
+              <div style={{ 
+                background: 'var(--surface-container)', 
+                borderRadius: '12px', 
+                padding: '16px', 
+                marginBottom: '16px',
+                overflow: 'hidden'
+              }}>
+                {isScanning && (
+                  <BarcodeScanner 
+                    onScan={handleScanSuccess} 
+                    onError={(err) => toast.error('Scanner error: ' + err)} 
+                  />
+                )}
+              </div>
+              <p style={{ 
+                fontSize: '13px', 
+                color: 'var(--outline)', 
+                textAlign: 'center', 
+                lineHeight: 1.5 
+              }}>
+                📷 Arahkan kamera ke barcode untuk scan otomatis
+                <br />
+                💡 Pastikan barcode terlihat jelas dan dalam kotak
+              </p>
+            </div>
+          ) : (
+            <div>
+              <div style={{ 
+                background: 'var(--surface-container-low)', 
+                borderRadius: 12, 
+                padding: 28, 
+                textAlign: 'center', 
+                marginBottom: 14, 
+                border: '2px dashed var(--outline-variant)' 
+              }}>
+                <Icon name="qr_code_scanner" size={48} color="var(--primary)" />
+                <p style={{ fontSize: 12, color: 'var(--outline)', lineHeight: 1.6 }}>
+                  Klik kolom di bawah, lalu scan atau ketik barcode
+                </p>
+              </div>
+              <input 
+                className="input mono" 
+                style={{ fontSize: 18, letterSpacing: 2 }}
+                placeholder="Scan atau ketik barcode..." 
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                onKeyDown={e => { 
+                  if (e.key === 'Enter' && code.trim()) {
+                    onScan(code.trim());
+                  }
+                }}
+                autoFocus 
+              />
+            </div>
+          )}
+        </div>
+        
         <div className="modal-footer">
           <button className="btn btn-ghost" onClick={onClose}>Batal</button>
-          <button className="btn btn-primary" disabled={!code.trim()} onClick={() => onScan(code.trim())}>
-            <Icon name="search" size={16} /> Cari
-          </button>
+          {mode === 'manual' && (
+            <button 
+              className="btn btn-primary" 
+              disabled={!code.trim()} 
+              onClick={() => onScan(code.trim())}
+            >
+              <Icon name="search" size={16} /> Cari
+            </button>
+          )}
         </div>
       </div>
     </div>
