@@ -8,11 +8,12 @@ import { useAuth } from '../context/AuthContext';
 export default function Settings() {
   const { isSuperAdmin } = useAuth();
   const { t } = useI18n();
-  const [settings, setSettings] = useState({ store_name: '', store_address: '', qris_image_b64: '', qris_notes: '', ppn_percent: 0, receipt_footer: '' });
+  const [settings, setSettings] = useState({ store_name: '', store_address: '', logo_image_b64: '', qris_image_b64: '', qris_notes: '', ppn_percent: 0, receipt_footer: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const fileInputRef = useRef(null);
+  const logoInputRef = useRef(null);
   const qrisInputRef = useRef(null);
 
   const fetchSettings = async () => {
@@ -54,6 +55,25 @@ export default function Settings() {
     e.target.value = '';
   };
 
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_SIZE = 500 * 1024; // 500KB for logo
+    if (file.size > MAX_SIZE) {
+      toast.error('Ukuran logo maksimal 500KB. Kompres gambar terlebih dahulu.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setSettings(s => ({ ...s, logo_image_b64: ev.target.result }));
+      toast.success('Logo toko siap. Klik Simpan untuk menyimpan.');
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const handleDeleteQRIS = async () => {
     if (!confirm('Hapus gambar QRIS?')) return;
     try {
@@ -61,6 +81,15 @@ export default function Settings() {
       setSettings(s => ({ ...s, qris_image_b64: '' }));
       toast.success('Gambar QRIS dihapus');
     } catch { toast.error('Gagal hapus gambar'); }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!confirm('Hapus logo toko?')) return;
+    try {
+      await api.delete('/settings/logo-image');
+      setSettings(s => ({ ...s, logo_image_b64: '' }));
+      toast.success('Logo toko dihapus');
+    } catch { toast.error('Gagal hapus logo'); }
   };
 
   const handleBackup = async () => {
@@ -220,6 +249,82 @@ export default function Settings() {
             <input className="input" placeholder="cth: Terima kasih! Barang yang dibeli tidak dapat dikembalikan."
               value={settings.receipt_footer || ''}
               onChange={e => setSettings(s => ({ ...s, receipt_footer: e.target.value }))} />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Custom Logo ─────────────────────────────────────────────────────── */}
+      <section className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid var(--outline-variant)' }}>
+          <Icon name="image" size={18} color="var(--primary)" />
+          <h2 style={{ fontSize: 15, fontWeight: 700 }}>Logo Toko (Opsional)</h2>
+        </div>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'start' }}>
+          {/* Logo preview */}
+          <div style={{ flex: '0 0 120px' }}>
+            {settings.logo_image_b64 ? (
+              <div style={{ position: 'relative' }}>
+                <img
+                  src={settings.logo_image_b64}
+                  alt="Logo"
+                  style={{ width: '100%', maxHeight: 80, objectFit: 'contain', borderRadius: 8, border: '2px solid var(--outline-variant)', backgroundColor: '#f8f9fa' }}
+                />
+                <button
+                  onClick={handleDeleteLogo}
+                  style={{
+                    position: 'absolute', top: 4, right: 4,
+                    background: 'rgba(239,68,68,0.9)', border: 'none',
+                    borderRadius: 4, cursor: 'pointer', padding: 4,
+                    color: 'white', display: 'flex', alignItems: 'center'
+                  }}
+                >
+                  <Icon name="delete" size={12} />
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                width: '100%', height: 80, backgroundColor: 'var(--surface-variant)',
+                border: '2px dashed var(--outline-variant)', borderRadius: 8,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4
+              }}>
+                <Icon name="image" size={20} color="var(--outline)" />
+                <span style={{ fontSize: 10, color: 'var(--outline)' }}>No Logo</span>
+              </div>
+            )}
+          </div>
+
+          {/* Logo upload controls */}
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <p style={{ fontSize: 12, color: 'var(--outline)', marginBottom: 12, lineHeight: '16px' }}>
+              Logo akan tampil di header struk thermal. Format: PNG/JPG, maksimal 500KB, ukuran ideal: 200x60px.
+            </p>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="file"
+                ref={logoInputRef}
+                accept="image/*"
+                onChange={handleLogoUpload}
+                style={{ display: 'none' }}
+              />
+              <button
+                className="button secondary"
+                onClick={() => logoInputRef.current?.click()}
+                style={{ fontSize: 13, padding: '8px 16px' }}
+              >
+                <Icon name="upload" size={14} style={{ marginRight: 6 }} />
+                {settings.logo_image_b64 ? 'Ganti Logo' : 'Upload Logo'}
+              </button>
+              {settings.logo_image_b64 && (
+                <button
+                  className="button"
+                  onClick={handleDeleteLogo}
+                  style={{ fontSize: 13, padding: '8px 16px', backgroundColor: 'var(--error)', color: 'white' }}
+                >
+                  <Icon name="delete" size={14} style={{ marginRight: 6 }} />
+                  Hapus
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </section>

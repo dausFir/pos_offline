@@ -17,9 +17,11 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 	settings := models.AppSettings{
 		StoreName:     database.GetSetting("store_name", "Toko Saya"),
 		StoreAddress:  database.GetSetting("store_address", ""),
+		LogoImageB64:  database.GetSetting("logo_image_b64", ""),
 		QRISImageB64:  database.GetSetting("qris_image_b64", ""),
 		QRISNotes:     database.GetSetting("qris_notes", "Scan QR di atas untuk pembayaran QRIS"),
 		PPNPercent:    ppn,
+		PPNMode:       database.GetSetting("ppn_mode", "exclusive"),
 		ReceiptFooter: database.GetSetting("receipt_footer", "Terima kasih atas kunjungan Anda!"),
 	}
 	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: settings})
@@ -32,12 +34,26 @@ func UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate ppn_mode
+	if req.PPNMode != "" && req.PPNMode != "inclusive" && req.PPNMode != "exclusive" {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "ppn_mode harus 'inclusive' atau 'exclusive'"})
+		return
+	}
+	// Default to exclusive if empty
+	if req.PPNMode == "" {
+		req.PPNMode = "exclusive"
+	}
+
 	pairs := map[string]string{
 		"store_name":     req.StoreName,
 		"store_address":  req.StoreAddress,
 		"qris_notes":     req.QRISNotes,
 		"ppn_percent":    fmt.Sprintf("%g", req.PPNPercent),
+		"ppn_mode":       req.PPNMode,
 		"receipt_footer": req.ReceiptFooter,
+	}
+	if req.LogoImageB64 != "" {
+		pairs["logo_image_b64"] = req.LogoImageB64
 	}
 	if req.QRISImageB64 != "" {
 		pairs["qris_image_b64"] = req.QRISImageB64
@@ -55,4 +71,9 @@ func UpdateSettings(w http.ResponseWriter, r *http.Request) {
 func DeleteQRISImage(w http.ResponseWriter, r *http.Request) {
 	database.SetSetting("qris_image_b64", "")
 	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Message: "Gambar QRIS dihapus"})
+}
+
+func DeleteLogoImage(w http.ResponseWriter, r *http.Request) {
+	database.SetSetting("logo_image_b64", "")
+	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Message: "Logo toko dihapus"})
 }

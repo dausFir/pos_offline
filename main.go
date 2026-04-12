@@ -102,6 +102,7 @@ func main() {
 	prot.Handle("/settings", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetSettings))).Methods("GET")
 	prot.Handle("/settings", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.UpdateSettings))).Methods("PUT")
 	prot.Handle("/settings/qris-image", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.DeleteQRISImage))).Methods("DELETE")
+	prot.Handle("/settings/logo-image", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.DeleteLogoImage))).Methods("DELETE")
 
 	// Export
 	prot.Handle("/export/transactions", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportTransactionsCSV))).Methods("GET")

@@ -18,6 +18,8 @@ const formatDateTime = (d) => {
 
 // Helper function to calculate receipt breakdown
 const calculateReceiptTotals = (transaction, settings = {}) => {
+  console.log('🐛 [DEBUG] Raw inputs:', { transaction, settings });
+  
   const details = transaction.details || [];
   
   // Calculate raw subtotal from items
@@ -34,6 +36,26 @@ const calculateReceiptTotals = (transaction, settings = {}) => {
   // Determine PPN mode
   const ppnMode = settings.ppn_mode || 'exclusive';
   const ppnPercent = settings.ppn_percent || 0;
+  
+  // DEBUG: Log values
+  console.log('🧾 Receipt Debug:', {
+    transaction: {
+      discount_amount: transaction.discount_amount,
+      ppn_amount: transaction.ppn_amount,
+      total_amount: transaction.total_amount
+    },
+    settings: {
+      ppn_mode: settings.ppn_mode,
+      ppn_percent: settings.ppn_percent
+    },
+    calculated: {
+      itemSubtotal,
+      discountAmount,
+      ppnAmount,
+      ppnPercent,
+      ppnMode
+    }
+  });
   
   return {
     itemSubtotal,           // subtotal before discount and tax
@@ -121,6 +143,7 @@ export function printReceipt(transaction, settings = {}, paperWidth = '80mm') {
 <body>
 
 <div class="center">
+  ${settings.logo_image_b64 ? `<div style="margin-bottom: 6px;"><img src="data:image/png;base64,${settings.logo_image_b64}" style="max-width: ${charWidth * 2}px; max-height: 40px; width: auto; height: auto;" /></div>` : ''}
   <div class="xl">${storeName}</div>
   ${storeAddress ? `<div>${storeAddress}</div>` : ''}
 </div>
@@ -157,8 +180,8 @@ ${totals.discountAmount > 0 ? `
 <div class="row"><span>Subtotal stlh diskon</span><span>${formatRp(totals.subtotalAfterDiscount)}</span></div>
 ` : ''}
 
-${totals.ppnAmount > 0 ? `
-<div class="row"><span>PPN ${totals.ppnPercent}% ${totals.ppnMode === 'inclusive' ? '(termasuk)' : ''}</span><span>${totals.ppnMode === 'inclusive' ? '' : '+ '}${formatRp(totals.ppnAmount)}</span></div>
+${totals.ppnPercent > 0 ? `
+<div class="row"><span>PPN ${totals.ppnPercent}% ${totals.ppnMode === 'inclusive' ? '(termasuk)' : ''}</span><span>${totals.ppnMode === 'inclusive' ? '' : '+ '}${formatRp(totals.ppnAmount || 0)}</span></div>
 ` : ''}
 
 <div class="dline"></div>
@@ -268,6 +291,15 @@ export function ReceiptPreview({ transaction, settings = {}, paperWidth = '80mm'
           }}>
             {/* Store header */}
             <div style={{ textAlign: 'center', marginBottom: 6 }}>
+              {settings.logo_image_b64 && (
+                <div style={{ marginBottom: 4 }}>
+                  <img 
+                    src={`data:image/png;base64,${settings.logo_image_b64}`}
+                    style={{ maxWidth: paperWidth === '58mm' ? 60 : 80, maxHeight: 30, width: 'auto', height: 'auto' }}
+                    alt="Logo"
+                  />
+                </div>
+              )}
               <div style={{ fontWeight: 800, fontSize: 14 }}>{storeName}</div>
               {storeAddress && <div style={{ fontSize: 10 }}>{storeAddress}</div>}
             </div>
@@ -311,10 +343,10 @@ export function ReceiptPreview({ transaction, settings = {}, paperWidth = '80mm'
               </>
             )}
 
-            {totals.ppnAmount > 0 && (
+            {totals.ppnPercent > 0 && (
               <ReceiptRow 
                 label={`PPN ${totals.ppnPercent}%${totals.ppnMode === 'inclusive' ? ' (termasuk)' : ''}`} 
-                value={(totals.ppnMode === 'inclusive' ? '' : '+ ') + fmt(totals.ppnAmount)} 
+                value={(totals.ppnMode === 'inclusive' ? '' : '+ ') + fmt(totals.ppnAmount || 0)} 
               />
             )}
 

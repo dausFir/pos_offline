@@ -69,8 +69,8 @@ type Transaction struct {
 	CashAmount     float64             `json:"cash_amount"`    // Kritis #6: split
 	QRISAmount     float64             `json:"qris_amount"`
 	DiscountCode   string              `json:"discount_code,omitempty"`
-	DiscountAmount float64             `json:"discount_amount,omitempty"`
-	PPNAmount      float64             `json:"ppn_amount,omitempty"` // PPN/tax amount
+	DiscountAmount float64             `json:"discount_amount"`
+	PPNAmount      float64             `json:"ppn_amount"` // PPN/tax amount
 	Status         string              `json:"status"`
 	CancelReason   string              `json:"cancel_reason,omitempty"`
 	Details        []TransactionDetail `json:"details,omitempty"`
@@ -154,9 +154,11 @@ type ProfitByCategory struct {
 type AppSettings struct {
 	StoreName     string  `json:"store_name"`
 	StoreAddress  string  `json:"store_address"`
+	LogoImageB64  string  `json:"logo_image_b64"` // Custom logo for receipts
 	QRISImageB64  string  `json:"qris_image_b64"`
 	QRISNotes     string  `json:"qris_notes"`
 	PPNPercent    float64 `json:"ppn_percent"` // 0 = no tax
+	PPNMode       string  `json:"ppn_mode"`    // "inclusive" | "exclusive"
 	ReceiptFooter string  `json:"receipt_footer"`
 }
 
@@ -264,9 +266,11 @@ type DiscountRequest struct {
 type SettingsRequest struct {
 	StoreName     string  `json:"store_name"`
 	StoreAddress  string  `json:"store_address"`
+	LogoImageB64  string  `json:"logo_image_b64"` // Custom logo for receipts
 	QRISImageB64  string  `json:"qris_image_b64"`
 	QRISNotes     string  `json:"qris_notes"`
 	PPNPercent    float64 `json:"ppn_percent"`
+	PPNMode       string  `json:"ppn_mode"`
 	ReceiptFooter string  `json:"receipt_footer"`
 }
 
