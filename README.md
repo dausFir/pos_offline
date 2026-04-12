@@ -48,6 +48,29 @@ cd frontend && npm run dev
 # API proxy ke: http://localhost:8080
 ```
 
+## ⚠️ Keamanan & Produksi
+
+**PENTING**: Sebelum deploy ke produksi, wajib set environment variable:
+
+```bash
+# Linux/Mac
+export JWT_SECRET="your-super-secure-secret-key-minimum-32-characters"
+
+# Windows
+set JWT_SECRET=your-super-secure-secret-key-minimum-32-characters
+
+# Generate secure key dengan OpenSSL
+openssl rand -base64 48
+```
+
+Copy [.env.example](.env.example) ke `.env` dan isi value yang sesuai.
+
+**Checklist Produksi**:
+- ✅ Set `JWT_SECRET` environment variable 
+- ✅ Backup database secara berkala
+- ✅ Test di network lokal sebelum go-live
+- ✅ Update password default admin
+
 ## Cara Pakai
 
 1. Double-click `kasir-umkm.exe`

@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -15,7 +17,29 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var JWTSecret = []byte("kasir-umkm-super-secret-key-2024-ganti-di-production")
+var jwtSecret []byte
+
+// Initialize JWT secret from environment variable or generate a secure default
+func init() {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		log.Println("⚠️  WARNING: JWT_SECRET environment variable not set")
+		log.Println("⚠️  Using default secret - CHANGE THIS IN PRODUCTION!")
+		secret = "kasir-umkm-super-secret-key-2024-ganti-di-production"
+	}
+
+	if len(secret) < 32 {
+		log.Fatalf("❌ JWT_SECRET must be at least 32 characters long")
+	}
+
+	jwtSecret = []byte(secret)
+	log.Printf("✅ JWT secret initialized (%d characters)", len(secret))
+}
+
+// GetJWTSecret returns the JWT secret
+func GetJWTSecret() []byte {
+	return jwtSecret
+}
 
 // Access token duration: 30 minutes (short-lived)
 const AccessTokenDuration = 30 * time.Minute
@@ -45,7 +69,7 @@ func GenerateAccessToken(user models.User) (string, error) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(JWTSecret)
+	return token.SignedString(GetJWTSecret())
 }
 
 func GenerateRefreshToken() (string, error) {
@@ -83,7 +107,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		tokenStr := parts[1]
 		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-			return JWTSecret, nil
+			return GetJWTSecret(), nil
 		})
 
 		if err != nil || !token.Valid {
