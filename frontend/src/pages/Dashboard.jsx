@@ -27,7 +27,6 @@ export default function Dashboard() {
         document.body.removeChild(link);
       }
     } catch (error) {
-      console.error('Export error:', error);
       alert('Gagal mengexport data: ' + (error.response?.data?.error || error.message));
     }
   };
@@ -39,14 +38,14 @@ export default function Dashboard() {
         const sRes = await api.get('/dashboard/stats');
         setStats(sRes.data.data);
       } catch (err) {
-        console.error('Dashboard stats error:', err);
+        // Dashboard stats error - silent fail
       }
       try {
         // Fetch low stock products separately with low_stock filter
         const pRes = await api.get('/products', { params: { low_stock: '1', limit: 50 } });
         setLowStock(pRes.data.data || []);
       } catch (err) {
-        console.error('Low stock fetch error:', err);
+        // Low stock fetch error - silent fail
       }
       setLoading(false);
     };

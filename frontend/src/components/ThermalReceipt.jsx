@@ -18,7 +18,7 @@ const formatDateTime = (d) => {
 
 // Helper function to calculate receipt breakdown
 const calculateReceiptTotals = (transaction, settings = {}) => {
-  console.log('🐛 [DEBUG] Raw inputs:', { transaction, settings });
+
   
   const details = transaction.details || [];
   
@@ -37,25 +37,7 @@ const calculateReceiptTotals = (transaction, settings = {}) => {
   const ppnMode = settings.ppn_mode || 'exclusive';
   const ppnPercent = settings.ppn_percent || 0;
   
-  // DEBUG: Log values
-  console.log('🧾 Receipt Debug:', {
-    transaction: {
-      discount_amount: transaction.discount_amount,
-      ppn_amount: transaction.ppn_amount,
-      total_amount: transaction.total_amount
-    },
-    settings: {
-      ppn_mode: settings.ppn_mode,
-      ppn_percent: settings.ppn_percent
-    },
-    calculated: {
-      itemSubtotal,
-      discountAmount,
-      ppnAmount,
-      ppnPercent,
-      ppnMode
-    }
-  });
+
   
   return {
     itemSubtotal,           // subtotal before discount and tax
@@ -219,7 +201,7 @@ ${totals.ppnPercent > 0 ? `
     try {
       iframe.contentWindow.focus();
       iframe.contentWindow.print();
-    } catch(e) { console.error('Print error', e); }
+    } catch(e) { /* Print error */ }
     
     setTimeout(() => {
       if (iframe.parentNode) {

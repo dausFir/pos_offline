@@ -105,7 +105,7 @@ export default function Settings() {
       URL.revokeObjectURL(a.href);
       toast.success('Backup berhasil diunduh');
     } catch (err) {
-      console.error('Backup error:', err);
+
       toast.error(err.response?.data?.error || 'Gagal backup database');
     }
   };
@@ -154,7 +154,7 @@ export default function Settings() {
       URL.revokeObjectURL(a.href);
       toast.success('File berhasil diunduh');
     } catch (err) {
-      console.error('Export error:', err);
+
       if (err.message?.includes('kadaluarsa') || err.message?.includes('expired')) {
         toast.error('Session expired. Silakan login ulang dan coba lagi.');
       } else {

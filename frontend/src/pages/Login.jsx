@@ -13,70 +13,37 @@ export default function Login() {
   const [showPass, setShow] = useState(false);
   const [loading, setLoad]  = useState(false);
 
-  console.log('🔥🔥🔥 [LOGIN COMPONENT] Component loaded! 🔥🔥🔥');
-
   const handleSubmit = async (e) => {
-    console.log('🔥🔥🔥 ================================ 🔥🔥🔥');
-    console.log('🔥🔥🔥 [LOGIN PAGE] SUBMIT EVENT TRIGGERED!! 🔥🔥🔥');
-    console.log('🔥🔥🔥 ================================ 🔥🔥🔥');
-    
     // PREVENT DEFAULT IMMEDIATELY 
     e.preventDefault();
     e.stopPropagation();
     
-    console.log('✅ [LOGIN PAGE] preventDefault() called');
-    console.log('📋 [LOGIN PAGE] Event type:', e.type);
-    console.log('📋 [LOGIN PAGE] Form data:', form);
-    console.log('📋 [LOGIN PAGE] Username:', form.username);
-    console.log('📋 [LOGIN PAGE] Password length:', form.password?.length);
-    
     if (!form.username || !form.password) { 
-      console.log('❌ [LOGIN PAGE] Missing credentials');
       toast.error('Username dan password wajib diisi'); 
       return false;
     }
     
-    console.log('⚡ [LOGIN PAGE] Calling login function...');
     setLoad(true);
     
     try {
-      console.log('🚀 [LOGIN PAGE] About to call await login()...');
       const user = await login(form.username, form.password);
-      console.log('✅ [LOGIN PAGE] Login successful! User:', user);
       
       // Verify localStorage before navigation
-      console.log('🔍 [LOGIN PAGE] Checking localStorage before navigation...');
       const storedAccess = localStorage.getItem('access_token');
       const storedRefresh = localStorage.getItem('refresh_token');
       const storedUser = localStorage.getItem('user');
       
-      console.log('🔍 [LOGIN PAGE] Pre-navigation check:');
-      console.log('   - access_token available:', !!storedAccess);
-      console.log('   - refresh_token available:', !!storedRefresh);
-      console.log('   - user available:', !!storedUser);
-      
       if (!storedAccess || !storedRefresh || !storedUser) {
-        console.error('🚨 [LOGIN PAGE] CRITICAL: Tokens missing before navigation!');
-        console.error('🚨 [LOGIN PAGE] This will cause 401 errors on next page!');
         toast.error('Login berhasil tapi token tidak tersimpan. Coba lagi.');
         return false;
       }
       
       toast.success(`Selamat datang, ${user.username}!`);
-      console.log('🧭 [LOGIN PAGE] About to navigate to /pos...');
       navigate('/pos');
-      console.log('✅ [LOGIN PAGE] Navigation to /pos completed');
       
     } catch (err) {
-      console.error('❌ [LOGIN PAGE] Login failed:', err);
-      console.error('❌ [LOGIN PAGE] Error details:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status
-      });
       toast.error(err.response?.data?.error || 'Username atau password salah');
     } finally { 
-      console.log('🏁 [LOGIN PAGE] Login attempt finished');
       setLoad(false); 
     }
     
@@ -178,7 +145,7 @@ export default function Login() {
               className="btn btn-primary btn-lg w-full" 
               disabled={loading}
               onClick={(e) => {
-                console.log('🔥 [LOGIN PAGE] BUTTON CLICKED!!');
+
                 e.preventDefault();
                 e.stopPropagation();
                 handleSubmit(e);

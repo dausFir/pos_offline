@@ -8,14 +8,9 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [refreshTimeout, setRefreshTimeout] = useState(null);
 
-  console.log('🔥🔥🔥 [AUTH CONTEXT] Component loaded 🔥🔥🔥');
-
   useEffect(() => {
-    console.log('🔥🔥🔥 [AUTH CONTEXT] useEffect triggered 🔥🔥🔥');
-    
     // Prevent infinite loops by setting loading false first
     const timeoutId = setTimeout(() => {
-      console.log('⏱️ [AUTH CONTEXT] Setting loading=false after timeout');
       setLoading(false);
     }, 100);
     
@@ -28,37 +23,24 @@ export function AuthProvider({ children }) {
     // Fallback to old token format for backward compatibility
     const oldToken = localStorage.getItem('token');
     
-    console.log('🔍 [AUTH CONTEXT] Storage check:');
-    console.log('  - stored user:', !!stored);
-    console.log('  - access_token:', !!accessToken);
-    console.log('  - refresh_token:', !!refreshToken);
-    console.log('  - old token:', !!oldToken);
-    
     if (stored) {
       try {
         const userData = JSON.parse(stored);
-        console.log('👤 [AUTH CONTEXT] Setting user:', userData);
         setUser(userData);
         
         if (accessToken && refreshToken) {
           // New refresh token system
-          console.log('🔄 Using new refresh token system');
           setupTokenRefresh();
         } else if (oldToken) {
           // Old single token system (still valid for existing sessions)
-          console.log('🔒 Using legacy token system');
         }
       } catch (parseError) {
-        console.error('❌ [AUTH CONTEXT] Failed to parse stored user:', parseError);
         localStorage.removeItem('user');
       }
-    } else {
-      console.log('🚫 [AUTH CONTEXT] No stored user found');
     }
     
     clearTimeout(timeoutId);
     setLoading(false);
-    console.log('✅ [AUTH CONTEXT] useEffect completed, loading=false');
   }, []);
 
   // Auto-refresh access token before it expires
