@@ -9,6 +9,29 @@ export default function Dashboard() {
   const [lowStock, setLowStock] = useState([]);
   const [loading, setLoading]   = useState(true);
 
+  const handleExportData = async () => {
+    try {
+      const response = await api.get('/export/transactions', { responseType: 'blob' });
+      
+      // Create blob and download
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      
+      if (link.download !== undefined) { // feature detection
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `transaksi_${new Date().toISOString().slice(0,10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Gagal mengexport data: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -57,12 +80,10 @@ export default function Dashboard() {
               Laporan Laba Rugi
             </button>
           </a>
-          <a href="/api/export/transactions" target="_blank" rel="noreferrer">
-            <button className="btn btn-tonal" style={{ gap: 6 }}>
-              <Icon name="download" size={18} />
-              Export Data
-            </button>
-          </a>
+          <button className="btn btn-tonal" style={{ gap: 6 }} onClick={handleExportData}>
+            <Icon name="download" size={18} />
+            Export Data
+          </button>
         </div>
       </div>
 
