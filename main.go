@@ -16,12 +16,22 @@ import (
 	"kasir-umkm/internal/middleware"
 
 	"github.com/gorilla/mux"
+	"github.com/joho/godotenv"
 )
 
 //go:embed frontend/dist
 var frontendFiles embed.FS
 
 func main() {
+	// Load environment variables from .env file
+	if err := godotenv.Load(); err != nil {
+		// .env file is optional, just log if not found
+		log.Printf("📝 No .env file found (using environment variables): %v", err)
+	}
+
+	// Initialize JWT secret after loading environment variables
+	middleware.InitializeJWT()
+
 	fmt.Println("╔══════════════════════════════════════════════════╗")
 	fmt.Println("║        KASIR & MANAJEMEN GUDANG UMKM v3.1        ║")
 	fmt.Println("║     Offline-First · Beli Putus · UMKM Ready      ║")

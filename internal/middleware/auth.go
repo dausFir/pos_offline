@@ -19,8 +19,8 @@ import (
 
 var jwtSecret []byte
 
-// Initialize JWT secret from environment variable or generate a secure default
-func init() {
+// InitializeJWT initializes JWT secret from environment variable or generates a secure default
+func InitializeJWT() {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		log.Println("⚠️  WARNING: JWT_SECRET environment variable not set")

@@ -484,6 +484,21 @@ func createImportantTables() error {
 		date_key TEXT PRIMARY KEY,
 		last_seq INTEGER NOT NULL DEFAULT 0
 	);
+
+	-- Sessions table for refresh token management
+	CREATE TABLE IF NOT EXISTS sessions (
+		id                    INTEGER  PRIMARY KEY AUTOINCREMENT,
+		user_id              INTEGER  NOT NULL REFERENCES users(id),
+		refresh_token_hash   TEXT     NOT NULL UNIQUE,
+		device_info          TEXT     NOT NULL DEFAULT '',
+		ip_address           TEXT     NOT NULL DEFAULT '',
+		expires_at           DATETIME NOT NULL,
+		last_activity        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_sessions_user_id        ON sessions(user_id);
+	CREATE INDEX IF NOT EXISTS idx_sessions_token_hash     ON sessions(refresh_token_hash);
+	CREATE INDEX IF NOT EXISTS idx_sessions_expires        ON sessions(expires_at);
 	`
 	_, err := DB.Exec(schema)
 	return err
