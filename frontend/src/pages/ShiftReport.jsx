@@ -3,6 +3,7 @@ import api, { formatRupiah } from '../utils/api';
 import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
 import Icon from '../components/Icon';
+import { handleTrialError } from '../utils/trial';
 
 export default function ShiftReport() {
   const { t } = useI18n();
@@ -21,7 +22,11 @@ export default function ShiftReport() {
     try {
       const res = await api.get('/reports/shift', { params: { date_from: dateFrom, date_to: dateTo } });
       setData(res.data.data);
-    } catch { toast.error('Gagal memuat laporan shift'); }
+    } catch (err) { 
+      if (!handleTrialError(err)) {
+        toast.error('Gagal memuat laporan shift');
+      }
+    }
     finally { setLoading(false); }
   };
 

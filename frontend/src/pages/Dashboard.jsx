@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import api, { formatRupiah } from '../utils/api';
 import { useI18n } from '../context/I18nContext';
 import Icon from '../components/Icon';
+import TrialBanner from '../components/TrialBanner';
+import { trialSafeExport } from '../utils/trial';
 
 export default function Dashboard() {
   const { t } = useI18n();
@@ -10,7 +12,7 @@ export default function Dashboard() {
   const [loading, setLoading]   = useState(true);
 
   const handleExportData = async () => {
-    try {
+    await trialSafeExport(async () => {
       const response = await api.get('/export/transactions', { responseType: 'blob' });
       
       // Create blob and download
@@ -26,9 +28,7 @@ export default function Dashboard() {
         link.click();
         document.body.removeChild(link);
       }
-    } catch (error) {
-      alert('Gagal mengexport data: ' + (error.response?.data?.error || error.message));
-    }
+    });
   };
 
   useEffect(() => {
@@ -64,6 +64,9 @@ export default function Dashboard() {
 
   return (
     <div style={{ padding: '32px 32px 48px', maxWidth: 1280 }}>
+      {/* Trial Banner */}
+      <TrialBanner />
+      
       {/* Header */}
       <div className="page-header">
         <div>

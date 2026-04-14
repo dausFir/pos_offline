@@ -4,6 +4,7 @@ import Icon from '../components/Icon';
 import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { handleTrialError, trialSafeExport } from '../utils/trial';
 
 export default function Settings() {
   const { isSuperAdmin } = useAuth();
@@ -93,7 +94,7 @@ export default function Settings() {
   };
 
   const handleBackup = async () => {
-    try {
+    await trialSafeExport(async () => {
       toast.success('Memulai backup database...');
       const response = await api.get('/backup', { responseType: 'blob' });
       
@@ -104,10 +105,7 @@ export default function Settings() {
       a.click();
       URL.revokeObjectURL(a.href);
       toast.success('Backup berhasil diunduh');
-    } catch (err) {
-
-      toast.error(err.response?.data?.error || 'Gagal backup database');
-    }
+    });
   };
 
   const handleRestore = async (e) => {
@@ -126,7 +124,9 @@ export default function Settings() {
       });
       toast.success(res.data.message || 'Restore berhasil. Restart aplikasi!', { duration: 6000 });
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Gagal restore database');
+      if (!handleTrialError(err)) {
+        toast.error(err.response?.data?.error || 'Gagal restore database');
+      }
     } finally {
       setRestoring(false);
       e.target.value = '';
@@ -134,7 +134,7 @@ export default function Settings() {
   };
 
   const exportWithAuth = async (path, filename) => {
-    try {
+    await trialSafeExport(async () => {
       toast.success('Memulai export data...');
       const response = await api.get(path, { responseType: 'blob' });
       
@@ -153,14 +153,7 @@ export default function Settings() {
       a.click();
       URL.revokeObjectURL(a.href);
       toast.success('File berhasil diunduh');
-    } catch (err) {
-
-      if (err.message?.includes('kadaluarsa') || err.message?.includes('expired')) {
-        toast.error('Session expired. Silakan login ulang dan coba lagi.');
-      } else {
-        toast.error(err.message || err.response?.data?.error || 'Gagal export data');
-      }
-    }
+    });
   };
 
   if (loading) return (

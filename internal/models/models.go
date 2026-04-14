@@ -183,6 +183,16 @@ type AppSettings struct {
 	EnableDana      bool `json:"enable_dana"`
 	EnableLinkAja   bool `json:"enable_linkaja"`
 	EnableShopeePay bool `json:"enable_shopee_pay"`
+
+	// Trial Version Settings
+	IsTrialVersion  bool             `json:"is_trial_version"`
+	TrialStartDate  *time.Time       `json:"trial_start_date"`
+	TrialExpiresAt  *time.Time       `json:"trial_expires_at"`
+	TrialDaysLeft   int              `json:"trial_days_left"`
+	MaxProducts     int              `json:"max_products"`
+	IsTrialExpired  bool             `json:"is_trial_expired"`
+	LicenseKey      string           `json:"license_key,omitempty"`
+	TrialUsageStats *TrialUsageStats `json:"trial_usage_stats,omitempty"`
 }
 
 // ── Requests ──────────────────────────────────────────────────────────────────
@@ -197,6 +207,29 @@ type Session struct {
 	LastActivity     time.Time `json:"last_activity"`
 	ExpiresAt        time.Time `json:"expires_at"`
 	IsActive         bool      `json:"is_active"`
+}
+
+type TrialUsageStats struct {
+	ProductsCreated   int            `json:"products_created"`
+	TransactionsCount int            `json:"transactions_count"`
+	TotalRevenue      float64        `json:"total_revenue"`
+	DaysUsed          int            `json:"days_used"`
+	FeatureUsage      map[string]int `json:"feature_usage"`
+}
+
+type LicenseActivationRequest struct {
+	LicenseKey string `json:"license_key"`
+	StoreName  string `json:"store_name"`
+	Email      string `json:"email"`
+	Phone      string `json:"phone"`
+}
+
+type TrialContactRequest struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone"`
+	Message  string `json:"message"`
+	Interest string `json:"interest"` // "upgrade", "demo", "support"
 }
 
 type LoginRequest struct {

@@ -59,6 +59,10 @@ func Init(dbPath string) error {
 	if err = seedSuperAdmin(); err != nil {
 		return err
 	}
+	log.Println("🔧 Initializing trial settings...")
+	if err = initializeTrialSettings(); err != nil {
+		return err
+	}
 
 	SetSetting("app_version", AppVersion)
 	SetSetting("db_init_at", time.Now().Format(time.RFC3339))
@@ -515,5 +519,32 @@ func runImportantMigrations() error {
 	for _, s := range stmts {
 		DB.Exec(s)
 	}
+	return nil
+}
+
+// Initialize trial settings on first run
+func initializeTrialSettings() error {
+	// Check if trial already initialized
+	if GetSetting("trial_initialized", "") != "" {
+		return nil // Already initialized
+	}
+
+	now := time.Now()
+	expiresAt := now.AddDate(0, 0, 7) // 7 days from now
+
+	settings := map[string]string{
+		"is_trial_version":  "true",
+		"trial_start_date":  now.Format("2006-01-02 15:04:05"),
+		"trial_expires_at":  expiresAt.Format("2006-01-02 15:04:05"),
+		"max_products":      "20",
+		"trial_initialized": "true",
+	}
+
+	for key, value := range settings {
+		if err := SetSetting(key, value); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

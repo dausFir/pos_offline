@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"kasir-umkm/internal/database"
 	"kasir-umkm/internal/models"
@@ -19,6 +21,66 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 	parseBool := func(key, defaultVal string) bool {
 		val := database.GetSetting(key, defaultVal)
 		return val == "true"
+	}
+
+	// Parse trial settings
+	isTrialVersion := parseBool("is_trial_version", "true")
+	maxProducts := 20
+	if val := database.GetSetting("max_products", "20"); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			maxProducts = parsed
+		}
+	}
+
+	// Calculate trial days left
+	var trialStartDate, trialExpiresAt *time.Time
+	var trialDaysLeft int
+	isTrialExpired := false
+	var trialUsageStats *models.TrialUsageStats
+
+	if isTrialVersion {
+		if startStr := database.GetSetting("trial_start_date", ""); startStr != "" {
+			if parsed, err := time.Parse("2006-01-02 15:04:05", startStr); err == nil {
+				trialStartDate = &parsed
+			}
+		}
+		if expiresStr := database.GetSetting("trial_expires_at", ""); expiresStr != "" {
+			if parsed, err := time.Parse("2006-01-02 15:04:05", expiresStr); err == nil {
+				trialExpiresAt = &parsed
+				now := time.Now()
+				if now.After(parsed) {
+					isTrialExpired = true
+					trialDaysLeft = 0
+				} else {
+					trialDaysLeft = int(parsed.Sub(now).Hours() / 24)
+					if trialDaysLeft < 0 {
+						trialDaysLeft = 0
+					}
+				}
+			}
+		}
+
+		// Get trial usage stats
+		var productsCreated, transactionsCount int
+		var totalRevenue float64
+		database.DB.QueryRow("SELECT COUNT(*) FROM products WHERE is_deleted = 0").Scan(&productsCreated)
+		database.DB.QueryRow("SELECT COUNT(*), COALESCE(SUM(total_amount), 0) FROM transactions WHERE status = 'completed'").Scan(&transactionsCount, &totalRevenue)
+
+		daysUsed := 0
+		if trialStartDate != nil {
+			daysUsed = int(time.Since(*trialStartDate).Hours() / 24)
+		}
+
+		trialUsageStats = &models.TrialUsageStats{
+			ProductsCreated:   productsCreated,
+			TransactionsCount: transactionsCount,
+			TotalRevenue:      totalRevenue,
+			DaysUsed:          daysUsed,
+			FeatureUsage: map[string]int{
+				"pos_transactions": transactionsCount,
+				"products_added":   productsCreated,
+			},
+		}
 	}
 
 	settings := models.AppSettings{
@@ -51,6 +113,16 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 		EnableDana:      parseBool("enable_dana", "false"),
 		EnableLinkAja:   parseBool("enable_linkaja", "false"),
 		EnableShopeePay: parseBool("enable_shopee_pay", "false"),
+
+		// Trial Version Settings
+		IsTrialVersion:  isTrialVersion,
+		TrialStartDate:  trialStartDate,
+		TrialExpiresAt:  trialExpiresAt,
+		TrialDaysLeft:   trialDaysLeft,
+		MaxProducts:     maxProducts,
+		IsTrialExpired:  isTrialExpired,
+		LicenseKey:      database.GetSetting("license_key", ""),
+		TrialUsageStats: trialUsageStats,
 	}
 	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: settings})
 }

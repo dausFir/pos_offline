@@ -3,6 +3,7 @@ import api, { formatDate } from '../utils/api';
 import Icon from '../components/Icon';
 import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
+import { trialSafeExport } from '../utils/trial';
 
 const TYPE_LABELS = {
   in:         { label: 'Stok Masuk',    color: 'badge-green',  icon: '📥', arrow: 'up'   },
@@ -24,6 +25,21 @@ export default function StockMutations() {
   const [saving, setSaving] = useState(false);
   const [productSearch, setProductSearch] = useState('');
   const limit = 30;
+
+  const handleExportMutations = async () => {
+    await trialSafeExport(async () => {
+      toast.success('Memulai export mutasi stok...');
+      const response = await api.get('/export/stock-mutations', { responseType: 'blob' });
+      
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `mutasi_stok_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast.success('File berhasil diunduh');
+    });
+  };
 
   const fetchMutations = useCallback(async () => {
     setLoading(true);
@@ -78,9 +94,7 @@ export default function StockMutations() {
           <p className='page-subtitle'>{total} catatan mutasi</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <a href={`/api/export/stock-mutations`} target="_blank" rel="noreferrer">
-            <button className="btn btn-ghost">📊 Export CSV</button>
-          </a>
+          <button className="btn btn-ghost" onClick={handleExportMutations}>📊 Export CSV</button>
           <button className="btn btn-ghost" onClick={fetchMutations}><Icon name="refresh" size={15} /></button>
           <button className="btn btn-primary" onClick={() => setShowModal(true)}>
             <Icon name="add" size={16} /> Catat Mutasi

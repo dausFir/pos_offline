@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { I18nProvider } from './context/I18nContext';
 import Login          from './pages/Login';
+import TrialExpired   from './pages/TrialExpired';
 import POS            from './pages/POS';
 import Dashboard      from './pages/Dashboard';
 import Products       from './pages/Products';
@@ -43,11 +44,17 @@ function Guard({ children, adminOnly = false, superAdminOnly = false }) {
 }
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, trialExpired } = useAuth();
   console.log('  - user exists:', !!user);
   console.log('  - user role:', user?.role);
   console.log('  - loading:', loading);
+  console.log('  - trial expired:', trialExpired);
   console.log('  - current location:', window.location.pathname);
+  
+  // Show trial expired page if trial has expired
+  if (user && trialExpired) {
+    return <TrialExpired />;
+  }
   
   return (
     <Routes>

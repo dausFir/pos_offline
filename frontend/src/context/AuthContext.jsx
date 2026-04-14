@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshTimeout, setRefreshTimeout] = useState(null);
+  const [trialExpired, setTrialExpired] = useState(false);
 
   useEffect(() => {
     // Prevent infinite loops by setting loading false first
@@ -80,6 +81,43 @@ export function AuthProvider({ children }) {
       return false;
     }
   };
+
+  // Check trial status
+  const checkTrialStatus = async () => {
+    try {
+      const res = await api.get('/settings');
+      return res.data;
+    } catch (err) {
+      if (err.response?.status === 403) {
+        const errorData = err.response.data;
+        if (errorData.error_code === 'TRIAL_EXPIRED') {
+          setTrialExpired(true);
+          return null;
+        }
+      }
+      throw err;
+    }
+  };
+
+  // Setup API interceptor for trial expiry
+  useEffect(() => {
+    const interceptor = api.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 403) {
+          const errorData = error.response.data;
+          if (errorData.error_code === 'TRIAL_EXPIRED') {
+            setTrialExpired(true);
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      api.interceptors.response.eject(interceptor);
+    };
+  }, []);
 
   const login = async (username, password) => {
     console.log('🔥🔥🔥 ========================================= 🔥🔥🔥');
@@ -283,7 +321,10 @@ export function AuthProvider({ children }) {
       hasRole, 
       isAdmin, 
       isSuperAdmin,
-      refreshAccessToken // Expose for manual refresh if needed  
+      refreshAccessToken, // Expose for manual refresh if needed
+      trialExpired,
+      setTrialExpired,
+      checkTrialStatus  
     }}>
       {children}
     </AuthContext.Provider>

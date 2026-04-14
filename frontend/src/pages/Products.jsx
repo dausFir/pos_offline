@@ -4,6 +4,7 @@ import api, { formatRupiah } from '../utils/api';
 import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
 import Icon from '../components/Icon';
+import { handleTrialError } from '../utils/trial';
 
 const emptyForm = { barcode_sku: '', name: '', category_id: '0', buy_price: '', sell_price: '', stock: '', stock_min: '5' };
 
@@ -91,7 +92,11 @@ export default function Products() {
         toast.success('Produk berhasil ditambahkan');
       }
       setShowModal(false); fetchProducts();
-    } catch (err) { toast.error(err.response?.data?.error || 'Gagal menyimpan produk'); }
+    } catch (err) {
+      if (!handleTrialError(err)) {
+        toast.error(err.response?.data?.error || 'Gagal menyimpan produk');
+      }
+    }
     finally { setSaving(false); }
   };
 

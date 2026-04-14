@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { useI18n } from '../context/I18nContext';
 import Icon from '../components/Icon';
+import api from '../utils/api';
 
 export default function Login() {
   const { login } = useAuth();
@@ -12,6 +13,23 @@ export default function Login() {
   const [form, setForm]     = useState({ username: '', password: '' });
   const [showPass, setShow] = useState(false);
   const [loading, setLoad]  = useState(false);
+  const [trialInfo, setTrialInfo] = useState(null);
+
+  // Get trial information on component mount
+  useEffect(() => {
+    const getTrialInfo = async () => {
+      try {
+        const res = await api.get('/api/settings');
+        if (res.data.success && res.data.data.is_trial_version) {
+          setTrialInfo(res.data.data);
+        }
+      } catch (err) {
+        // Ignore errors, just don't show trial info
+        console.log('Failed to get trial info:', err);
+      }
+    };
+    getTrialInfo();
+  }, []);
 
   const handleSubmit = async (e) => {
     // PREVENT DEFAULT IMMEDIATELY 
@@ -164,6 +182,37 @@ export default function Login() {
           <div style={{ marginTop: 24, padding: '12px 14px', background: 'var(--surface-container-low)', borderRadius: 10, border: '1px dashed var(--outline-variant)', fontSize: 13, color: 'var(--on-surface-variant)', textAlign: 'center' }}>
             Login default: <strong style={{ color: 'var(--primary)' }}>admin</strong> / <strong style={{ color: 'var(--primary)' }}>admin123</strong>
           </div>
+
+          {/* Trial version notification */}
+          {trialInfo?.is_trial_version && (
+            <div style={{ 
+              marginTop: 16, 
+              padding: '14px 16px', 
+              background: 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)',
+              borderRadius: 10, 
+              border: '1px solid #f39c12',
+              borderLeft: '4px solid #f39c12',
+              fontSize: 13
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <Icon name="schedule" size={16} color="#d68910" />
+                <strong style={{ color: '#d68910', fontSize: 14 }}>VERSI TRIAL</strong>
+              </div>
+              <div style={{ color: '#856404', lineHeight: 1.4 }}>
+                {trialInfo.is_trial_expired ? (
+                  <div style={{ color: '#dc3545' }}>
+                    <strong>Trial telah berakhir.</strong> Hubungi kami untuk upgrade ke versi penuh.
+                  </div>
+                ) : (
+                  <div>
+                    Sisa waktu: <strong>{trialInfo.trial_days_left} hari</strong><br />
+                    Sudah digunakan: <strong>{trialInfo.trial_usage_stats?.days_used || 0} hari</strong><br />
+                    Batas produk: <strong>{trialInfo.max_products} produk</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </form>
       </div>
 

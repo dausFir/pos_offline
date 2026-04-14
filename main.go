@@ -53,9 +53,14 @@ func main() {
 	api.HandleFunc("/logout", handlers.Logout).Methods("POST", "OPTIONS")
 	api.HandleFunc("/status", handlers.GetServerStatus).Methods("GET", "OPTIONS") // Kritis #5 — no auth needed
 
+	// Trial version endpoints (no auth required)
+	api.HandleFunc("/trial/contact", handlers.SubmitTrialContact).Methods("POST", "OPTIONS")
+	api.HandleFunc("/trial/stats", handlers.GetTrialUsageStats).Methods("GET", "OPTIONS")
+
 	// ── Protected ──────────────────────────────────────────────────────────────
 	prot := api.NewRoute().Subrouter()
 	prot.Use(middleware.AuthMiddleware)
+	prot.Use(middleware.CheckTrialExpiry) // Block all features when trial expired
 
 	prot.HandleFunc("/me", handlers.GetMe).Methods("GET")
 	prot.HandleFunc("/change-password", handlers.ChangePassword).Methods("POST") // Kritis #1
@@ -72,7 +77,7 @@ func main() {
 	prot.Handle("/products/{id}/stock-history", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetProductStockHistory))).Methods("GET")
 	prot.Handle("/products/{id}/price-history", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetPriceHistory))).Methods("GET")
 	prot.Handle("/products/{id}", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetProduct))).Methods("GET")
-	prot.Handle("/products", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.CreateProduct))).Methods("POST")
+	prot.Handle("/products", middleware.CheckTrialLimits(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.CreateProduct)))).Methods("POST")
 	prot.Handle("/products/{id}", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.UpdateProduct))).Methods("PUT")
 	prot.Handle("/products/{id}", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.DeleteProduct))).Methods("DELETE")
 
@@ -86,7 +91,7 @@ func main() {
 	prot.Handle("/dashboard/stats", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetDashboardStats))).Methods("GET")
 
 	// Kritis #2: Laporan Laba Rugi
-	prot.Handle("/reports/profit", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetProfitReport))).Methods("GET")
+	prot.Handle("/reports/profit", middleware.CheckTrialForAdvancedReports(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetProfitReport)))).Methods("GET")
 
 	// Users
 	prot.Handle("/users", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.GetUsers))).Methods("GET")
@@ -114,17 +119,20 @@ func main() {
 	prot.Handle("/settings/qris-image", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.DeleteQRISImage))).Methods("DELETE")
 	prot.Handle("/settings/logo-image", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.DeleteLogoImage))).Methods("DELETE")
 
+	// License management
+	prot.Handle("/license/activate", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ActivateLicense))).Methods("POST")
+
 	// Export
-	prot.Handle("/export/transactions", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportTransactionsCSV))).Methods("GET")
-	prot.Handle("/export/products", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportProductsCSV))).Methods("GET")
-	prot.Handle("/export/stock-mutations", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportStockMutationsCSV))).Methods("GET")
+	prot.Handle("/export/transactions", middleware.CheckTrialForExport(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportTransactionsCSV)))).Methods("GET")
+	prot.Handle("/export/products", middleware.CheckTrialForExport(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportProductsCSV)))).Methods("GET")
+	prot.Handle("/export/stock-mutations", middleware.CheckTrialForExport(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportStockMutationsCSV)))).Methods("GET")
 
 	// Backup / Restore
-	prot.Handle("/backup", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.BackupDatabase))).Methods("GET")
-	prot.Handle("/restore", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.RestoreDatabase))).Methods("POST")
+	prot.Handle("/backup", middleware.CheckTrialForBackup(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.BackupDatabase)))).Methods("GET")
+	prot.Handle("/restore", middleware.CheckTrialForBackup(middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.RestoreDatabase)))).Methods("POST")
 
 	// ── Penting #1: Laporan Shift ────────────────────────────────────────────────
-	prot.Handle("/reports/shift", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetShiftReport))).Methods("GET")
+	prot.Handle("/reports/shift", middleware.CheckTrialForAdvancedReports(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetShiftReport)))).Methods("GET")
 
 	// ── Penting #3: Harga Grosir/Member ───────────────────────────────────────
 	prot.Handle("/products/{product_id}/price-tiers", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetPriceTiers))).Methods("GET")
@@ -147,7 +155,7 @@ func main() {
 	prot.Handle("/suppliers/{id}", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.DeleteSupplier))).Methods("DELETE")
 
 	// ── Penting #9: Import Produk CSV ─────────────────────────────────────────
-	prot.Handle("/import/products", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ImportProductsCSV))).Methods("POST")
+	prot.Handle("/import/products", middleware.CheckTrialLimits(middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ImportProductsCSV)))).Methods("POST")
 	prot.Handle("/import/products/template", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.ExportProductsCSVTemplate))).Methods("GET")
 
 	// ── SPA ────────────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import api from '../utils/api';
 import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
 import Icon from '../components/Icon';
+import { handleTrialError } from '../utils/trial';
 
 export default function ImportProducts() {
   const { t } = useI18n();
@@ -27,7 +28,11 @@ export default function ImportProducts() {
       const res = await api.post('/import/products', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setResult(res.data.data);
       toast.success(res.data.message);
-    } catch (err) { toast.error(err.response?.data?.error || 'Gagal import'); }
+    } catch (err) { 
+      if (!handleTrialError(err)) {
+        toast.error(err.response?.data?.error || 'Gagal import');
+      }
+    }
     finally { setLoading(false); }
   };
 
