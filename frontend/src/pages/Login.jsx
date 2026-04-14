@@ -196,7 +196,7 @@ export default function Login() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <Icon name="schedule" size={16} color="#d68910" />
-                <strong style={{ color: '#d68910', fontSize: 14 }}>VERSI TRIAL</strong>
+                <strong style={{ color: '#d68910', fontSize: 14 }}>VERSI TRIAL VERSION</strong>
               </div>
               <div style={{ color: '#856404', lineHeight: 1.4 }}>
                 {trialInfo.is_trial_expired ? (

@@ -55,7 +55,7 @@ export default function TrialBanner() {
           <Icon name={isExpired ? "error" : "schedule"} size={22} color={colors.border} />
           <div>
             <div style={{ fontWeight: 700, marginBottom: 2, fontSize: 15 }}>
-              {isExpired ? '⏰ Trial Berakhir' : `⏰ Trial - ${daysLeft} hari tersisa`}
+              {isExpired ? '⏰ Trial Version Berakhir' : `⏰ Trial Version - ${daysLeft} hari tersisa`}
             </div>
             <div style={{ fontSize: 13, opacity: 0.85 }}>
               {isExpired ? 

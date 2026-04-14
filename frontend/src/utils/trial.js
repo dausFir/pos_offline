@@ -2,7 +2,7 @@
 import api from './api';
 
 // Create modal for trial limitation
-export const showTrialModal = (message, title = 'Fitur Terbatas - Versi Trial', showContactForm = true) => {
+export const showTrialModal = (message, title = 'Fitur Terbatas - Versi Trial Version', showContactForm = true) => {
   // Create modal elements
   const overlay = document.createElement('div');
   overlay.style.cssText = `
@@ -137,7 +137,7 @@ export const handleTrialError = (error) => {
         console.log('Parsed blob data:', data);
         if (data.data?.is_trial_limit) {
           console.log('Showing trial modal from blob response');
-          showTrialModal(data.error || 'Fitur terbatas di versi trial');
+          showTrialModal(data.error || 'Fitur terbatas di versi trial version');
         }
       } catch (e) {
         console.log('Error parsing blob as JSON:', e);

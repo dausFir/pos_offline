@@ -30,7 +30,7 @@ func CheckTrialLimits(next http.Handler) http.Handler {
 		if expiresStr := database.GetSetting("trial_expires_at", ""); expiresStr != "" {
 			if expiresAt, err := time.Parse("2006-01-02 15:04:05", expiresStr); err == nil {
 				if time.Now().After(expiresAt) {
-					writeTrialError(w, "Trial period Anda telah berakhir. Silakan upgrade ke versi penuh untuk melanjutkan.")
+					writeTrialError(w, "Trial version period Anda telah berakhir. Silakan upgrade ke versi penuh untuk melanjutkan.")
 					return
 				}
 			}
@@ -59,13 +59,13 @@ func CheckTrialLimits(next http.Handler) http.Handler {
 			// For import, we need to check the incoming products count
 			if r.URL.Path == "/api/products/import" {
 				// For simplicity, block all imports in trial
-				writeTrialError(w, "Import produk tidak tersedia di versi trial. Maksimal 20 produk dapat ditambah manual.")
+				writeTrialError(w, "Import produk tidak tersedia di versi trial version. Maksimal 20 produk dapat ditambah manual.")
 				return
 			}
 
 			// For single product creation
 			if count >= maxProducts {
-				writeTrialError(w, "Batas maksimal produk trial tercapai (20 produk). Upgrade ke versi penuh untuk menambah lebih banyak produk.")
+				writeTrialError(w, "Batas maksimal produk trial version tercapai (20 produk). Upgrade ke versi penuh untuk menambah lebih banyak produk.")
 				return
 			}
 		}
@@ -104,7 +104,7 @@ func CheckTrialExpiry(next http.Handler) http.Handler {
 						}
 					}
 
-					writeTrialError(w, "Trial period Anda telah berakhir. Semua fitur terkunci. Silakan aktivasi license untuk melanjutkan.")
+					writeTrialError(w, "Trial version period Anda telah berakhir. Semua fitur terkunci. Silakan aktivasi license untuk melanjutkan.")
 					return
 				}
 			}
@@ -125,7 +125,7 @@ func CheckTrialForExport(next http.Handler) http.Handler {
 		}
 
 		// Block all export functionality in trial
-		writeTrialError(w, "Fitur export tidak tersedia di versi trial. Upgrade ke versi penuh untuk mengakses fitur export.")
+		writeTrialError(w, "Fitur export tidak tersedia di versi trial version. Upgrade ke versi penuh untuk mengakses fitur export.")
 	})
 }
 
@@ -140,7 +140,7 @@ func CheckTrialForBackup(next http.Handler) http.Handler {
 		}
 
 		// Block backup/restore functionality in trial
-		writeTrialError(w, "Fitur backup/restore database tidak tersedia di versi trial. Upgrade ke versi penuh untuk mengamankan data Anda.")
+		writeTrialError(w, "Fitur backup/restore database tidak tersedia di versi trial version. Upgrade ke versi penuh untuk mengamankan data Anda.")
 	})
 }
 
@@ -162,14 +162,14 @@ func CheckTrialForAdvancedReports(next http.Handler) http.Handler {
 			if r.URL.Query().Get("category_breakdown") == "1" ||
 				r.URL.Query().Get("period") == "yearly" ||
 				r.URL.Query().Get("export") == "1" {
-				writeTrialError(w, "Laporan detail dan breakdown kategori tidak tersedia di versi trial. Upgrade untuk akses laporan lengkap.")
+				writeTrialError(w, "Laporan detail dan breakdown kategori tidak tersedia di versi trial version. Upgrade untuk akses laporan lengkap.")
 				return
 			}
 		}
 
 		// Block advanced reports completely
 		if path == "/api/reports/shift" {
-			writeTrialError(w, "Laporan shift tidak tersedia di versi trial. Upgrade untuk akses semua fitur laporan.")
+			writeTrialError(w, "Laporan shift tidak tersedia di versi trial version. Upgrade untuk akses semua fitur laporan.")
 			return
 		}
 
