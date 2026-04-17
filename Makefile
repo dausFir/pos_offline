@@ -1,10 +1,15 @@
-.PHONY: all build-frontend build-go dev clean
+.PHONY: all build-frontend build-go build-installer dev clean
 
 all: build
 
 build: build-frontend build-go
 	@echo ""
 	@echo "✅ Build selesai: kasir-umkm.exe"
+
+build-installer: build
+	@echo ""
+	@echo "📦 Building Windows installer..."
+	@./build-installer.sh
 
 build-frontend:
 	@echo "📦 Building React frontend..."
@@ -13,7 +18,7 @@ build-frontend:
 build-go:
 	@echo "🔨 Compiling Go binary..."
 	go mod tidy
-	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o kasir-umkm.exe .
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o kasir-umkm.exe .
 
 build-linux:
 	@echo "🔨 Compiling for Linux..."

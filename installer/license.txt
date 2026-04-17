@@ -1,0 +1,32 @@
+KASIR UMKM - PERJANJIAN LISENSI PENGGUNA AKHIR
+================================================
+
+Terima kasih telah memilih Kasir UMKM!
+
+PERJANJIAN LISENSI:
+Dengan menginstall dan menggunakan perangkat lunak ini, Anda menyetujui ketentuan berikut:
+
+1. PENGGUNAAN
+   - Software ini gratis untuk digunakan untuk keperluan bisnis UMKM
+   - Anda boleh menggunakan di beberapa komputer dalam satu bisnis
+   - Tidak diperbolehkan untuk dijual kembali atau didistribusikan
+
+2. HAK CIPTA
+   - Software ini dilindungi hak cipta
+   - Anda tidak diperbolehkan memodifikasi atau reverse engineering
+
+3. GARANSI
+   - Software disediakan "apa adanya" tanpa garansi
+   - Developer tidak bertanggung jawab atas kehilangan data
+
+4. DUKUNGAN
+   - Update gratis akan tersedia
+   - Dukungan teknis melalui dokumentasi dan komunitas
+
+5. PEMBATASAN
+   - Tidak boleh digunakan untuk aktivitas ilegal
+   - Tidak boleh mengganggu sistem lain
+
+Dengan menekan "I Agree" atau melanjutkan instalasi, Anda menyetujui semua ketentuan di atas.
+
+© 2026 Kasir UMKM Team. All rights reserved.

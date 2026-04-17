@@ -97,16 +97,30 @@ cd frontend && npm run dev
 
 **Build Production:**
 ```bash
-# Windows
+# Windows - Executable only
 build.bat
+
+# Windows - With Installer (Recommended for Distribution)
+build-installer.bat     # Batch script
+# atau:
+.\build-installer.ps1   # PowerShell script
 
 # Linux/Mac
 make build
+
+# Linux/Mac - With installer (via Wine + NSIS)
+make build-installer
 
 # Cross compile untuk platform lain
 GOOS=linux GOARCH=amd64 go build -o kasir-umkm-linux
 GOOS=windows GOARCH=amd64 go build -o kasir-umkm.exe
 ```
+
+**📦 Distribution Options:**
+- **Standalone**: `kasir-umkm.exe` (langsung jalan, tidak perlu install)
+- **Professional Installer**: `kasir-umkm-installer-v3.4.exe` (install ke Program Files, shortcut desktop, uninstaller)
+
+> 💡 **Tips**: Gunakan installer untuk distribusi ke client yang prefer instalasi profesional dengan shortcut desktop dan entry di Add/Remove Programs.
 
 ## 🔐 Keamanan & Konfigurasi Produksi
 
