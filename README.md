@@ -346,7 +346,7 @@ kasir-umkm_v3.4/
 | `GET` | `/api/export/transactions` | admin+ | Export transaksi ke CSV |
 | `GET` | `/api/export/products` | admin+ | Export produk ke CSV |
 | `GET` | `/api/export/stock-mutations` | admin+ | Export stock mutations ke CSV |
-| `GET` | `/api/backup/database` | super_admin | Download backup database SQLite |
+| `POST` | `/api/backup` | admin+ | Download backup database terenkripsi `.posbak` |
 
 ### Permission Levels:
 - ✅ **All** = Authenticated users (kasir, admin, super_admin)
@@ -396,10 +396,8 @@ go build -ldflags="-s -w" -o kasir-umkm main.go
 ### Database Maintenance
 ```bash  
 # Backup database harian
-cp database.sqlite backup/database-$(date +%Y%m%d).sqlite
-
-# Compress old backups
-gzip backup/database-*.sqlite
+# Gunakan menu Backup aplikasi. File .posbak dienkripsi AES-256-GCM dan
+# hanya dapat dipulihkan melalui aplikasi dengan password owner yang sama.
 
 # Check database integrity
 echo "PRAGMA integrity_check;" | sqlite3 database.sqlite

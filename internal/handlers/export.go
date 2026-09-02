@@ -1,17 +1,17 @@
 package handlers
 
 import (
-	"archive/zip"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"kasir-umkm/internal/database"
 	"kasir-umkm/internal/models"
+	"kasir-umkm/internal/services"
 )
 
 // ExportTransactionsCSV exports transactions as UTF-8 CSV (Excel-compatible with BOM)
@@ -162,8 +162,26 @@ func ExportStockMutationsCSV(w http.ResponseWriter, r *http.Request) {
 	cw.Flush()
 }
 
-// BackupDatabase streams the sqlite file as a ZIP download
+const maxBackupSize = 50 << 20
+
+type backupPasswordRequest struct {
+	Password string `json:"password"`
+}
+
+// BackupDatabase streams an AES-256-GCM encrypted POSBAK download. The owner
+// password is never stored by the application; it is required again on restore.
 func BackupDatabase(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	var request backupPasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password backup wajib diisi"})
+		return
+	}
+	if len(request.Password) < 12 {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password backup minimal 12 karakter"})
+		return
+	}
+
 	dbPath := "database.sqlite"
 	// SQLite berjalan dalam WAL mode. Checkpoint memastikan perubahan di WAL
 	// masuk ke file utama sebelum file tersebut diarsipkan.
@@ -176,30 +194,34 @@ func BackupDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename := fmt.Sprintf("backup_kasir_%s.zip", time.Now().Format("20060102_150405"))
-	w.Header().Set("Content-Type", "application/zip")
+	databaseData, err := os.ReadFile(dbPath)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal membaca database"})
+		return
+	}
+	if len(databaseData) > maxBackupSize {
+		writeJSON(w, http.StatusRequestEntityTooLarge, models.APIResponse{Success: false, Error: "Ukuran database melebihi batas backup 50 MB"})
+		return
+	}
+	encryptedData, err := services.EncryptBackup(databaseData, request.Password)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal mengenkripsi backup"})
+		return
+	}
+
+	filename := fmt.Sprintf("backup_kasir_%s.posbak", time.Now().Format("20060102_150405"))
+	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
-
-	zw := zip.NewWriter(w)
-	defer zw.Close()
-
-	// Add database file
-	f, err := os.Open(dbPath)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
-	entry, err := zw.Create("database.sqlite")
-	if err != nil {
-		return
-	}
-	io.Copy(entry, f)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(encryptedData)
 }
 
-// RestoreDatabase handles database restore from uploaded file
+// RestoreDatabase accepts only authenticated POSBAK containers.
 func RestoreDatabase(w http.ResponseWriter, r *http.Request) {
-	r.ParseMultipartForm(50 << 20) // 50MB max
+	if err := r.ParseMultipartForm(maxBackupSize); err != nil {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "File backup terlalu besar"})
+		return
+	}
 
 	file, header, err := r.FormFile("backup")
 	if err != nil {
@@ -208,83 +230,44 @@ func RestoreDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Validate file extension
-	name := strings.ToLower(header.Filename)
-	if !strings.HasSuffix(name, ".sqlite") && !strings.HasSuffix(name, ".zip") {
-		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Format file tidak valid (.sqlite atau .zip)"})
+	if header.Size > maxBackupSize {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "File backup terlalu besar"})
+		return
+	}
+	if len(r.FormValue("backup_password")) < 12 {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password backup minimal 12 karakter"})
+		return
+	}
+	encryptedData, err := io.ReadAll(io.LimitReader(file, maxBackupSize+1))
+	if err != nil || len(encryptedData) > maxBackupSize {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Gagal membaca file backup"})
+		return
+	}
+	databaseData, err := services.DecryptBackup(encryptedData, r.FormValue("backup_password"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Backup tidak valid, telah berubah, atau password salah"})
+		return
+	}
+	if len(databaseData) < 16 || string(databaseData[:16]) != "SQLite format 3\x00" {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Isi backup bukan database SQLite yang valid"})
 		return
 	}
 
-	var sqliteData io.Reader = file
-
-	// If zip, extract the sqlite file
-	if strings.HasSuffix(name, ".zip") {
-		tmpFile, err := os.CreateTemp("", "backup-*.zip")
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal proses file"})
-			return
-		}
-		defer os.Remove(tmpFile.Name())
-		io.Copy(tmpFile, file)
-		tmpFile.Close()
-
-		zr, err := zip.OpenReader(tmpFile.Name())
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "File ZIP tidak valid"})
-			return
-		}
-		defer zr.Close()
-
-		var found bool
-		for _, f := range zr.File {
-			if strings.HasSuffix(f.Name, ".sqlite") {
-				rc, _ := f.Open()
-				defer rc.Close()
-
-				// Write to backup then replace
-				out, err := os.Create("database.sqlite.restore")
-				if err != nil {
-					writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal tulis file"})
-					return
-				}
-				io.Copy(out, rc)
-				out.Close()
-				found = true
-				break
-			}
-		}
-		if !found {
-			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "File .sqlite tidak ditemukan dalam ZIP"})
-			return
-		}
-
-		// Replace current DB
-		os.Rename("database.sqlite", "database.sqlite.bak")
-		if err := os.Rename("database.sqlite.restore", "database.sqlite"); err != nil {
-			os.Rename("database.sqlite.bak", "database.sqlite")
-			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal replace database"})
-			return
-		}
-		os.Remove("database.sqlite.bak")
-		_ = sqliteData
-	} else {
-		// Direct .sqlite upload
-		out, err := os.Create("database.sqlite.restore")
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal tulis file"})
-			return
-		}
-		io.Copy(out, sqliteData)
-		out.Close()
-
-		os.Rename("database.sqlite", "database.sqlite.bak")
-		if err := os.Rename("database.sqlite.restore", "database.sqlite"); err != nil {
-			os.Rename("database.sqlite.bak", "database.sqlite")
-			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal replace database"})
-			return
-		}
-		os.Remove("database.sqlite.bak")
+	if err := os.WriteFile("database.sqlite.restore", databaseData, 0600); err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menulis database hasil restore"})
+		return
 	}
+	if err := os.Rename("database.sqlite", "database.sqlite.bak"); err != nil {
+		_ = os.Remove("database.sqlite.restore")
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menyiapkan restore database"})
+		return
+	}
+	if err := os.Rename("database.sqlite.restore", "database.sqlite"); err != nil {
+		_ = os.Rename("database.sqlite.bak", "database.sqlite")
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal mengganti database"})
+		return
+	}
+	_ = os.Remove("database.sqlite.bak")
 
 	writeJSON(w, http.StatusOK, models.APIResponse{
 		Success: true,

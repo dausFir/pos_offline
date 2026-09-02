@@ -120,7 +120,7 @@ func main() {
 	prot.Handle("/export/stock-mutations", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportStockMutationsCSV))).Methods("GET")
 
 	// Backup / Restore
-	prot.Handle("/backup", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.BackupDatabase))).Methods("GET")
+	prot.Handle("/backup", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.BackupDatabase))).Methods("POST")
 	prot.Handle("/restore", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.RestoreDatabase))).Methods("POST")
 
 	// ── Penting #1: Laporan Shift ────────────────────────────────────────────────

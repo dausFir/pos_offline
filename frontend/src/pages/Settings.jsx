@@ -93,14 +93,20 @@ export default function Settings() {
   };
 
   const handleBackup = async () => {
+    const password = window.prompt('Buat password backup owner (minimal 12 karakter). Password ini wajib diingat untuk restore.');
+    if (password === null) return;
+    if (password.length < 12) {
+      toast.error('Password backup minimal 12 karakter.');
+      return;
+    }
     try {
       toast.success('Memulai backup database...');
-      const response = await api.get('/backup', { responseType: 'blob' });
+      const response = await api.post('/backup', { password }, { responseType: 'blob' });
       
       const blob = new Blob([response.data]);
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `backup_kasir_${new Date().toISOString().slice(0,10)}.zip`;
+      a.download = `backup_kasir_${new Date().toISOString().slice(0,10)}.posbak`;
       a.click();
       URL.revokeObjectURL(a.href);
       toast.success('Backup berhasil diunduh');
@@ -117,10 +123,21 @@ export default function Settings() {
       e.target.value = '';
       return;
     }
+    const password = window.prompt('Masukkan password owner yang digunakan saat membuat backup.');
+    if (password === null) {
+      e.target.value = '';
+      return;
+    }
+    if (password.length < 12) {
+      toast.error('Password backup minimal 12 karakter.');
+      e.target.value = '';
+      return;
+    }
     setRestoring(true);
     try {
       const formData = new FormData();
       formData.append('backup', file);
+      formData.append('backup_password', password);
       const res = await api.post('/restore', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
@@ -646,10 +663,10 @@ export default function Settings() {
               <span style={{ fontWeight: 700, fontSize: 14 }}>Backup Data</span>
             </div>
             <p style={{ fontSize: 12, color: 'var(--outline)', marginBottom: 14, lineHeight: 1.6 }}>
-              Unduh salinan database.sqlite ke PC Anda. Simpan di tempat aman sebagai cadangan.
+              Buat backup terenkripsi. Password owner diperlukan lagi saat restore dan tidak disimpan aplikasi.
             </p>
             <button className="btn btn-success w-full" onClick={handleBackup}>
-              <Icon name="download" size={16} /> Download Backup (.zip)
+              <Icon name="download" size={16} /> Download Backup Terenkripsi
             </button>
           </div>
 
@@ -661,11 +678,11 @@ export default function Settings() {
               {!isSuperAdmin() && <span className="badge badge-yellow">Super Admin</span>}
             </div>
             <p style={{ fontSize: 12, color: 'var(--outline)', marginBottom: 14, lineHeight: 1.6 }}>
-              Pulihkan database dari file backup. <strong style={{ color: 'var(--error)' }}>Semua data saat ini akan digantikan.</strong>
+              Pulihkan file backup terenkripsi (.posbak). <strong style={{ color: 'var(--error)' }}>Semua data saat ini akan digantikan.</strong>
             </p>
             {isSuperAdmin() ? (
               <>
-                <input ref={fileInputRef} type="file" accept=".sqlite,.zip" style={{ display: 'none' }} onChange={handleRestore} />
+                <input ref={fileInputRef} type="file" accept=".posbak" style={{ display: 'none' }} onChange={handleRestore} />
                 <button
                   className="btn btn-danger w-full"
                   onClick={() => fileInputRef.current?.click()}
