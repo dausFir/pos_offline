@@ -15,9 +15,7 @@ import (
 )
 
 func Checkout(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("=== CHECKOUT DEBUG START ===")
 	claims := middleware.GetClaims(r)
-	fmt.Printf("[DEBUG] User ID: %d, Username: %s\n", claims.UserID, claims.Username)
 
 	var req models.CheckoutRequestV3
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -25,14 +23,21 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Request tidak valid"})
 		return
 	}
-	fmt.Printf("[DEBUG] Request decoded - Items: %d, PaymentMethod: %s\n", len(req.Items), req.PaymentMethod)
 	if len(req.Items) == 0 {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Keranjang belanja kosong"})
 		return
 	}
+	if req.OnCredit {
+		if req.CustomerID <= 0 {
+			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Pelanggan wajib dipilih untuk transaksi kredit"})
+			return
+		}
+		req.PaymentMethod = "credit"
+	}
 	validMethod := map[string]bool{
 		"cash": true, "qris": true, "split": true,
 		"gopay": true, "ovo": true, "dana": true, "linkaja": true, "shopeepay": true,
+		"credit": true,
 	}
 	if !validMethod[req.PaymentMethod] {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Metode pembayaran tidak valid"})
@@ -46,7 +51,6 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback() // Always rollback, akan diabaikan jika sudah commit
-	fmt.Println("[DEBUG] Transaction started successfully")
 
 	type itemDetail struct {
 		product                       models.Product
@@ -57,32 +61,40 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	var details []itemDetail
 	var subtotalBeforeDiscount float64
 
+	itemsByProduct := make(map[int64]int, len(req.Items))
 	for _, item := range req.Items {
 		if item.Quantity <= 0 {
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Kuantitas harus > 0"})
 			return
 		}
+		itemsByProduct[item.ProductID] += item.Quantity
+	}
+
+	for productID, quantity := range itemsByProduct {
 		var p models.Product
 		var catName string
-		fmt.Printf("[DEBUG] Checking product ID: %d\n", item.ProductID)
 		scanErr := tx.QueryRow(
 			`SELECT p.id, p.barcode_sku, p.name, COALESCE(c.name,''), p.buy_price, p.sell_price, p.stock
 			 FROM products p LEFT JOIN categories c ON p.category_id=c.id
-			 WHERE p.id=? AND p.is_deleted=0`, item.ProductID,
+			 WHERE p.id=? AND p.is_deleted=0`, productID,
 		).Scan(&p.ID, &p.BarcodeSKU, &p.Name, &catName, &p.BuyPrice, &p.SellPrice, &p.Stock)
 		if scanErr != nil {
-			fmt.Printf("[ERROR] Product query scan: %v for ProductID: %d\n", scanErr, item.ProductID)
-			writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: fmt.Sprintf("Produk ID %d tidak ditemukan", item.ProductID)})
+			writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: fmt.Sprintf("Produk ID %d tidak ditemukan", productID)})
 			return
 		}
-		fmt.Printf("[DEBUG] Product found: %s (Stock: %d)\n", p.Name, p.Stock)
-		if p.Stock < item.Quantity {
+		if p.Stock < quantity {
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Stok %s tidak cukup (tersedia: %d)", p.Name, p.Stock)})
 			return
 		}
-		sub := p.SellPrice * float64(item.Quantity)
+		unitPrice := p.SellPrice
+		// Harga tier dihitung ulang di server; nilai dari browser tidak dipercaya.
+		var tierPrice float64
+		if err := tx.QueryRow("SELECT price FROM price_tiers WHERE product_id=? AND min_qty<=? AND price<? ORDER BY min_qty DESC LIMIT 1", p.ID, quantity, p.SellPrice).Scan(&tierPrice); err == nil {
+			unitPrice = tierPrice
+		}
+		sub := unitPrice * float64(quantity)
 		subtotalBeforeDiscount += sub
-		details = append(details, itemDetail{product: p, qty: item.Quantity, unitPrice: p.SellPrice, subtotal: sub, buyPrice: p.BuyPrice, catName: catName})
+		details = append(details, itemDetail{product: p, qty: quantity, unitPrice: unitPrice, subtotal: sub, buyPrice: p.BuyPrice, catName: catName})
 	}
 
 	// Validate discount
@@ -92,7 +104,7 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		var dtype string
 		var dvalue, dmin float64
 		var isActive int
-		err2 := database.DB.QueryRow(
+		err2 := tx.QueryRow(
 			"SELECT type, value, min_purchase, is_active FROM discounts WHERE code=? COLLATE NOCASE AND is_deleted=0",
 			discountCode,
 		).Scan(&dtype, &dvalue, &dmin, &isActive)
@@ -109,10 +121,6 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	// Penting #5: customer debt support
-	_ = req.CustomerID // TODO: implement customer debt support
-	_ = req.OnCredit   // TODO: implement credit transactions
-
 	subtotalAfterDiscount := subtotalBeforeDiscount - discountAmount
 
 	// PPN / Tax calculation with support for inclusive/exclusive mode
@@ -146,6 +154,10 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch req.PaymentMethod {
+	case "credit":
+		cashAmt, qrisAmt = 0, 0
+		req.EwalletAmount, req.EwalletProvider = 0, ""
+		req.PaymentAmount = 0
 	case "cash":
 		cashAmt = req.PaymentAmount
 		qrisAmt = 0
@@ -185,14 +197,11 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now()
-	fmt.Println("[DEBUG] Generating invoice number with existing transaction...")
 	invoice, err := database.GenerateInvoiceNumberWithTx(tx)
 	if err != nil {
-		fmt.Printf("[ERROR] Generate invoice number: %v\n", err)
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal generate invoice number"})
 		return
 	}
-	fmt.Printf("[DEBUG] Invoice generated: %s\n", invoice)
 
 	// Penting #5: resolve customer nullable
 	var custID interface{} = nil
@@ -202,9 +211,13 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	onCreditVal := 0
 	if req.OnCredit {
 		onCreditVal = 1
+		var customerExists int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM customers WHERE id=? AND is_deleted=0", req.CustomerID).Scan(&customerExists); err != nil || customerExists != 1 {
+			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Pelanggan tidak ditemukan"})
+			return
+		}
 	}
 
-	fmt.Printf("[DEBUG] Inserting transaction - Invoice: %s, Total: %.2f, Payment: %.2f\n", invoice, totalAmount, req.PaymentAmount)
 	result, err := tx.Exec(
 		`INSERT INTO transactions
 		(invoice_number,user_id,customer_id,total_amount,payment_amount,change_amount,payment_method,cash_amount,qris_amount,ewallet_amount,ewallet_provider,
@@ -214,35 +227,32 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		discountCode, discountAmount, ppnAmount, onCreditVal, "completed", 1, now, claims.UserID, now, claims.UserID,
 	)
 	if err != nil {
-		fmt.Printf("[ERROR] Insert transaction: %v\n", err)
-		fmt.Printf("[ERROR] Values: invoice=%s, userID=%d, custID=%v, total=%.2f\n", invoice, claims.UserID, custID, totalAmount)
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal simpan transaksi"})
 		return
 	}
 	txID, _ := result.LastInsertId()
 
 	var txDetails []models.TransactionDetail
-	fmt.Printf("[DEBUG] Inserting %d transaction details...\n", len(details))
-	for i, d := range details {
-		fmt.Printf("[DEBUG] Detail %d: Product %s (ID: %d), Qty: %d\n", i+1, d.product.Name, d.product.ID, d.qty)
+	for _, d := range details {
 		_, err = tx.Exec(
 			`INSERT INTO transaction_details (transaction_id,product_id,product_name,category_name,quantity,unit_price,buy_price,subtotal,created_at)
 			 VALUES (?,?,?,?,?,?,?,?,?)`,
 			txID, d.product.ID, d.product.Name, d.catName, d.qty, d.unitPrice, d.buyPrice, d.subtotal, now,
 		)
 		if err != nil {
-			fmt.Printf("[ERROR] Insert transaction detail %d: %v\n", i+1, err)
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal simpan detail"})
 			return
 		}
 
 		stockBefore := d.product.Stock
-		fmt.Printf("[DEBUG] Updating stock for product %d: %d -> %d\n", d.product.ID, stockBefore, stockBefore-d.qty)
-		_, err = tx.Exec("UPDATE products SET stock=stock-?,updated_at=?,updated_by=?,version=version+1 WHERE id=?",
-			d.qty, now, claims.UserID, d.product.ID)
+		stockResult, err := tx.Exec("UPDATE products SET stock=stock-?,updated_at=?,updated_by=?,version=version+1 WHERE id=? AND stock>=? AND is_deleted=0",
+			d.qty, now, claims.UserID, d.product.ID, d.qty)
 		if err != nil {
-			fmt.Printf("[ERROR] Update stock for product %d: %v\n", d.product.ID, err)
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal update stok"})
+			return
+		}
+		if updated, _ := stockResult.RowsAffected(); updated != 1 {
+			writeJSON(w, http.StatusConflict, models.APIResponse{Success: false, Error: fmt.Sprintf("Stok %s berubah, silakan ulangi transaksi", d.product.Name)})
 			return
 		}
 
@@ -256,23 +266,28 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	if req.OnCredit {
+		var curBalance float64
+		if err := tx.QueryRow("SELECT debt_balance FROM customers WHERE id=? AND is_deleted=0", req.CustomerID).Scan(&curBalance); err != nil {
+			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal membaca saldo hutang pelanggan"})
+			return
+		}
+		newBalance := curBalance + totalAmount
+		if _, err := tx.Exec("UPDATE customers SET debt_balance=?, updated_at=? WHERE id=?", newBalance, now, req.CustomerID); err != nil {
+			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal mencatat hutang pelanggan"})
+			return
+		}
+		if _, err := tx.Exec(`INSERT INTO debt_ledger (customer_id, transaction_id, invoice_number, amount, type, note, balance_after, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)`, req.CustomerID, txID, invoice, totalAmount, "debt", "Pembelian "+invoice, newBalance, claims.UserID, now); err != nil {
+			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menyimpan riwayat hutang"})
+			return
+		}
+	}
+
 	if err = tx.Commit(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal commit"})
 		return
 	}
 
-	// Penting #5: if on_credit, record debt to customer
-	if req.OnCredit && req.CustomerID > 0 {
-		var curBalance float64
-		database.DB.QueryRow("SELECT debt_balance FROM customers WHERE id=?", req.CustomerID).Scan(&curBalance)
-		newBalance := curBalance + totalAmount
-		database.DB.Exec("UPDATE customers SET debt_balance=?, updated_at=? WHERE id=?", newBalance, now, req.CustomerID)
-		database.DB.Exec(`INSERT INTO debt_ledger (customer_id, transaction_id, invoice_number, amount, type, note, balance_after, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
-			req.CustomerID, txID, invoice, totalAmount, "debt", "Pembelian "+invoice, newBalance, claims.UserID, now)
-	}
-
-	fmt.Printf("[DEBUG] Checkout successful - Transaction ID: %d, Invoice: %s\n", txID, invoice)
-	fmt.Println("=== CHECKOUT DEBUG END ===")
 	writeJSON(w, http.StatusCreated, models.APIResponse{
 		Success: true, Message: "Transaksi berhasil",
 		Data: models.Transaction{
@@ -296,9 +311,11 @@ func CancelTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var t models.Transaction
+	var customerID int64
+	var onCredit int
 	err := database.DB.QueryRow(
-		"SELECT id, invoice_number, status, total_amount FROM transactions WHERE id=? AND is_deleted=0", id,
-	).Scan(&t.ID, &t.InvoiceNumber, &t.Status, &t.TotalAmount)
+		"SELECT id, invoice_number, status, total_amount, COALESCE(customer_id,0), on_credit FROM transactions WHERE id=? AND is_deleted=0", id,
+	).Scan(&t.ID, &t.InvoiceNumber, &t.Status, &t.TotalAmount, &customerID, &onCredit)
 	if err != nil {
 		writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: "Transaksi tidak ditemukan"})
 		return
@@ -342,6 +359,25 @@ func CancelTransaction(w http.ResponseWriter, r *http.Request) {
 		tx.Exec("UPDATE products SET stock=stock+?,updated_at=?,updated_by=?,version=version+1 WHERE id=?", d.qty, now, claims.UserID, d.pid)
 		tx.Exec(`INSERT INTO stock_mutations (product_id,type,quantity,stock_before,stock_after,note,ref_id,user_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
 			d.pid, "cancel", d.qty, sb, sb+d.qty, fmt.Sprintf("Cancel %s: %s", t.InvoiceNumber, req.Reason), id, claims.UserID, now)
+	}
+	if onCredit == 1 && customerID > 0 {
+		var balance float64
+		if err := tx.QueryRow("SELECT debt_balance FROM customers WHERE id=? AND is_deleted=0", customerID).Scan(&balance); err != nil || balance < t.TotalAmount {
+			tx.Rollback()
+			writeJSON(w, http.StatusConflict, models.APIResponse{Success: false, Error: "Saldo hutang pelanggan tidak valid"})
+			return
+		}
+		newBalance := balance - t.TotalAmount
+		if _, err := tx.Exec("UPDATE customers SET debt_balance=?, updated_at=? WHERE id=?", newBalance, now, customerID); err != nil {
+			tx.Rollback()
+			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal membalik hutang pelanggan"})
+			return
+		}
+		if _, err := tx.Exec(`INSERT INTO debt_ledger (customer_id, transaction_id, invoice_number, amount, type, note, balance_after, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)`, customerID, id, t.InvoiceNumber, t.TotalAmount, "payment", "Pembatalan transaksi "+t.InvoiceNumber, newBalance, claims.UserID, now); err != nil {
+			tx.Rollback()
+			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menyimpan pembalikan hutang"})
+			return
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal commit"})

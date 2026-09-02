@@ -165,6 +165,12 @@ func ExportStockMutationsCSV(w http.ResponseWriter, r *http.Request) {
 // BackupDatabase streams the sqlite file as a ZIP download
 func BackupDatabase(w http.ResponseWriter, r *http.Request) {
 	dbPath := "database.sqlite"
+	// SQLite berjalan dalam WAL mode. Checkpoint memastikan perubahan di WAL
+	// masuk ke file utama sebelum file tersebut diarsipkan.
+	if _, err := database.DB.Exec("PRAGMA wal_checkpoint(FULL)"); err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menyiapkan backup database"})
+		return
+	}
 	if _, err := os.Stat(dbPath); err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "File database tidak ditemukan"})
 		return

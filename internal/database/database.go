@@ -493,12 +493,14 @@ func createImportantTables() error {
 		device_info          TEXT     NOT NULL DEFAULT '',
 		ip_address           TEXT     NOT NULL DEFAULT '',
 		expires_at           DATETIME NOT NULL,
+		is_active            INTEGER  NOT NULL DEFAULT 1,
 		last_activity        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_sessions_user_id        ON sessions(user_id);
 	CREATE INDEX IF NOT EXISTS idx_sessions_token_hash     ON sessions(refresh_token_hash);
 	CREATE INDEX IF NOT EXISTS idx_sessions_expires        ON sessions(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_sessions_active         ON sessions(is_active, expires_at);
 	`
 	_, err := DB.Exec(schema)
 	return err
@@ -511,6 +513,8 @@ func runImportantMigrations() error {
 		`ALTER TABLE transactions ADD COLUMN ppn_amount REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE products ADD COLUMN supplier_id INTEGER REFERENCES suppliers(id)`,
 		`CREATE INDEX IF NOT EXISTS idx_transactions_customer ON transactions(customer_id) WHERE customer_id IS NOT NULL`,
+		`ALTER TABLE sessions ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(is_active, expires_at)`,
 	}
 	for _, s := range stmts {
 		DB.Exec(s)

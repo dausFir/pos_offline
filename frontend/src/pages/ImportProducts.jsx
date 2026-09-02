@@ -32,7 +32,7 @@ export default function ImportProducts() {
   };
 
   const downloadTemplate = () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('access_token');
     fetch('/api/import/products/template', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.blob()).then(blob => {
         const a = document.createElement('a');

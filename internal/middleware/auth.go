@@ -23,9 +23,11 @@ var jwtSecret []byte
 func InitializeJWT() {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		log.Println("⚠️  WARNING: JWT_SECRET environment variable not set")
-		log.Println("⚠️  Using default secret - CHANGE THIS IN PRODUCTION!")
-		secret = "kasir-umkm-super-secret-key-2024-ganti-di-production"
+		if os.Getenv("GO_ENV") == "production" {
+			log.Fatal("JWT_SECRET wajib di-set saat GO_ENV=production")
+		}
+		log.Println("⚠️  JWT_SECRET belum di-set; hanya diizinkan untuk development")
+		secret = "development-only-secret-change-before-production"
 	}
 
 	if len(secret) < 32 {

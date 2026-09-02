@@ -44,10 +44,6 @@ function Guard({ children, adminOnly = false, superAdminOnly = false }) {
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  console.log('  - user exists:', !!user);
-  console.log('  - user role:', user?.role);
-  console.log('  - loading:', loading);
-  console.log('  - current location:', window.location.pathname);
   
   return (
     <Routes>
@@ -76,28 +72,6 @@ function AppRoutes() {
 }
 
 export default function App() {
-  // Safety mechanism to prevent infinite refresh loops
-  const preventInfiniteLoop = () => {
-    const refreshCount = sessionStorage.getItem('refresh_count') || 0;
-    const newCount = parseInt(refreshCount) + 1;
-    
-    if (newCount > 5) {
-      localStorage.clear();
-      sessionStorage.clear();
-      window.location.href = '/login';
-      return;
-    }
-    
-    sessionStorage.setItem('refresh_count', newCount);
-    
-    // Clear refresh count after successful load
-    setTimeout(() => {
-      sessionStorage.removeItem('refresh_count');
-    }, 5000);
-  };
-  
-  preventInfiniteLoop();
-  
   return (
     <I18nProvider>
       <AuthProvider>

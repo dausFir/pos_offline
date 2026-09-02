@@ -16,7 +16,6 @@ import (
 
 // Login with refresh token
 func Login(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("🔐 [LOGIN] Request received")
 
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -25,10 +24,8 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("📋 [LOGIN] Username: %s\n", req.Username)
 
 	if req.Username == "" || req.Password == "" {
-		fmt.Println("❌ [LOGIN] Empty credentials")
 		logLogin(0, req.Username, r, "failed", "username/password kosong")
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Username dan password wajib diisi"})
 		return
@@ -42,47 +39,35 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		&user.AuditFields.Version, &user.AuditFields.CreatedAt, &user.AuditFields.UpdatedAt)
 
 	if err != nil {
-		fmt.Printf("❌ [LOGIN] Database query error: %v\n", err)
 		logLogin(0, req.Username, r, "failed", "username tidak ditemukan")
 		writeJSON(w, http.StatusUnauthorized, models.APIResponse{Success: false, Error: "Username atau password salah"})
 		return
 	}
 
-	fmt.Printf("✅ [LOGIN] User found: %s (ID: %d)\n", user.Username, user.ID)
-
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		fmt.Printf("❌ [LOGIN] Password mismatch: %v\n", err)
 		logLogin(user.ID, req.Username, r, "failed", "password salah")
 		writeJSON(w, http.StatusUnauthorized, models.APIResponse{Success: false, Error: "Username atau password salah"})
 		return
 	}
 
-	fmt.Println("✅ [LOGIN] Password verified")
-
 	// Generate access & refresh tokens
 	accessToken, err := middleware.GenerateAccessToken(user)
 	if err != nil {
-		fmt.Printf("❌ [LOGIN] Access token generation error: %v\n", err)
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal membuat token"})
 		return
 	}
 
 	refreshToken, err := middleware.GenerateRefreshToken()
 	if err != nil {
-		fmt.Printf("❌ [LOGIN] Refresh token generation error: %v\n", err)
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal membuat refresh token"})
 		return
 	}
-
-	fmt.Printf("🎟️ [LOGIN] Tokens generated - Access: %s..., Refresh: %s...\n", accessToken[:20], refreshToken[:20])
 
 	// Store refresh token in database
 	refreshTokenHash := middleware.HashRefreshToken(refreshToken)
 	deviceInfo := r.Header.Get("User-Agent")
 	ipAddress := getClientIP(r)
 	expiresAt := time.Now().Add(middleware.RefreshTokenDuration)
-
-	fmt.Printf("💾 [LOGIN] Storing session - User: %d, IP: %s\n", user.ID, ipAddress)
 
 	_, err = database.DB.Exec(`
 		INSERT INTO sessions (user_id, refresh_token_hash, device_info, ip_address, expires_at, last_activity)
@@ -104,8 +89,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		ExpiresIn:    int(middleware.AccessTokenDuration.Seconds()),
 	}
 
-	fmt.Printf("📤 [LOGIN] Sending response: AccessToken=%s..., RefreshToken=%s..., ExpiresIn=%d\n",
-		response.AccessToken[:20], response.RefreshToken[:20], response.ExpiresIn)
 
 	logLogin(user.ID, req.Username, r, "success", "")
 	writeJSON(w, http.StatusOK, models.APIResponse{
