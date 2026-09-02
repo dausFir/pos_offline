@@ -89,6 +89,7 @@ cd frontend && npm install && cd ..
 
 # Run development server
 export JWT_SECRET="development-secret-key-minimum-32-characters"
+export INITIAL_ADMIN_PASSWORD="ganti-dengan-password-admin-yang-kuat"
 go run main.go
 
 # Untuk hot reload frontend (optional, terminal terpisah):
@@ -132,7 +133,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ### Checklist Keamanan Produksi
 - ✅ **Set JWT_SECRET** environment variable (minimum 32 karakter)
-- ✅ **Ganti password default**: `admin`/`admin123` 
+- ✅ **Set `INITIAL_ADMIN_PASSWORD`** saat membuat database baru.
 - ✅ **Firewall setup**: Batasi akses port 8080 hanya dari LAN
 - ✅ **Database backup**: Backup rutin file `database.sqlite`
 - ✅ **Network isolation**: Jangan expose ke internet public
@@ -159,7 +160,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 ### Setup Awal
 1. **Start Server**: Double-click `kasir-umkm.exe` atau `./kasir-umkm`
 2. **Browser Auto-Open**: PC otomatis buka http://localhost:8080
-3. **Login Pertama**: `admin` / `admin123` (WAJIB ganti!)
+3. **Login Pertama**: username `admin`; password menggunakan `INITIAL_ADMIN_PASSWORD` saat database pertama dibuat.
 4. **Mobile Access**: HP ke `http://192.168.x.x:8080` (lihat IP di terminal)
 
 ### Workflow Kasir Harian  
@@ -428,7 +429,7 @@ echo "PRAGMA integrity_check;" | sqlite3 database.sqlite
 ### Default Credentials (CHANGE IMMEDIATELY!)
 ```
 Username: admin
-Password: admin123
+Password: nilai `INITIAL_ADMIN_PASSWORD` (minimal 12 karakter)
 Role: super_admin
 ```
 

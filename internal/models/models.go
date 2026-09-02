@@ -462,6 +462,27 @@ type ImportResult struct {
 	Errors  []string `json:"errors"`
 }
 
+type ImportJob struct {
+	ID            int64  `json:"id"`
+	FileName      string `json:"file_name"`
+	StockMode     string `json:"stock_mode"`
+	TotalRows     int    `json:"total_rows"`
+	ProcessedRows int    `json:"processed_rows"`
+	SuccessRows   int    `json:"success_rows"`
+	FailedRows    int    `json:"failed_rows"`
+	Status        string `json:"status"`
+	ErrorMessage  string `json:"error_message,omitempty"`
+	CreatedAt     string `json:"created_at"`
+	StartedAt     string `json:"started_at,omitempty"`
+	FinishedAt    string `json:"finished_at,omitempty"`
+}
+
+type ImportJobError struct {
+	RowNumber    int    `json:"row_number"`
+	BarcodeSKU   string `json:"barcode_sku,omitempty"`
+	ErrorMessage string `json:"error_message"`
+}
+
 // ── Extended checkout for customer + credit ───────────────────────────────────
 type CheckoutRequestV3 struct {
 	Items           []CheckoutItem `json:"items"`

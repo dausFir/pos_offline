@@ -65,7 +65,7 @@ echo.
 echo CARA PAKAI:
 echo   1. Klik 2x kasir-umkm.exe
 echo   2. Browser terbuka otomatis
-echo   3. Login: admin / admin123
+echo   3. Login: admin / password dari INITIAL_ADMIN_PASSWORD
 echo   4. Buka dari HP: lihat IP di terminal
 echo.
 echo FITUR v3.1 (TERBARU):

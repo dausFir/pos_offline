@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -295,7 +296,11 @@ func seedSuperAdmin() error {
 	if count > 0 {
 		return nil
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	initialPassword := os.Getenv("INITIAL_ADMIN_PASSWORD")
+	if len(initialPassword) < 12 {
+		return fmt.Errorf("INITIAL_ADMIN_PASSWORD wajib di-set (minimal 12 karakter) saat membuat database baru")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(initialPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
@@ -307,7 +312,7 @@ func seedSuperAdmin() error {
 	if err != nil {
 		return err
 	}
-	log.Println("🌱 Akun super_admin dibuat: admin / admin123")
+	log.Println("🌱 Akun super_admin 'admin' berhasil dibuat")
 	return nil
 }
 
@@ -501,6 +506,33 @@ func createImportantTables() error {
 	CREATE INDEX IF NOT EXISTS idx_sessions_token_hash     ON sessions(refresh_token_hash);
 	CREATE INDEX IF NOT EXISTS idx_sessions_expires        ON sessions(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_sessions_active         ON sessions(is_active, expires_at);
+
+	CREATE TABLE IF NOT EXISTS import_jobs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		file_name TEXT NOT NULL,
+		stock_mode TEXT NOT NULL CHECK(stock_mode IN ('replace_stock','add_stock','product_only')),
+		total_rows INTEGER NOT NULL DEFAULT 0,
+		processed_rows INTEGER NOT NULL DEFAULT 0,
+		success_rows INTEGER NOT NULL DEFAULT 0,
+		failed_rows INTEGER NOT NULL DEFAULT 0,
+		status TEXT NOT NULL CHECK(status IN ('queued','processing','completed','completed_with_errors','failed')),
+		error_message TEXT NOT NULL DEFAULT '',
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		started_at DATETIME,
+		finished_at DATETIME
+	);
+	CREATE INDEX IF NOT EXISTS idx_import_jobs_status ON import_jobs(status, created_at);
+	CREATE TABLE IF NOT EXISTS import_job_errors (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		import_job_id INTEGER NOT NULL REFERENCES import_jobs(id),
+		row_number INTEGER NOT NULL,
+		barcode_sku TEXT NOT NULL DEFAULT '',
+		error_message TEXT NOT NULL,
+		raw_data TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_import_job_errors_job ON import_job_errors(import_job_id, row_number);
 	`
 	_, err := DB.Exec(schema)
 	return err

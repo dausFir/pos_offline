@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import api from '../utils/api';
 import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
@@ -10,6 +10,8 @@ export default function ImportProducts() {
   const [result,   setResult]   = useState(null);
   const [loading,  setLoading]  = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [stockMode, setStockMode] = useState('replace_stock');
+  const [jobId, setJobId] = useState(null);
   const fileRef = useRef(null);
 
   const handleFile = (f) => {
@@ -24,12 +26,31 @@ export default function ImportProducts() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('stock_mode', stockMode);
       const res = await api.post('/import/products', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setResult(res.data.data);
-      toast.success(res.data.message);
+      setJobId(res.data.data.job_id);
+      setResult({ status: 'queued', total_rows: 0, processed_rows: 0, success_rows: 0, failed_rows: 0 });
+      toast.success('Import masuk antrean');
     } catch (err) { toast.error(err.response?.data?.error || 'Gagal import'); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    if (!jobId) return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await api.get('/import/products/status', { params: { job_id: jobId } });
+        const job = res.data.data;
+        setResult(job);
+        if (['completed', 'completed_with_errors', 'failed'].includes(job.status)) {
+          clearInterval(timer);
+          if (job.status === 'completed') toast.success('Import selesai');
+          if (job.status === 'completed_with_errors') toast.error('Import selesai dengan beberapa error');
+        }
+      } catch { clearInterval(timer); }
+    }, 700);
+    return () => clearInterval(timer);
+  }, [jobId]);
 
   const downloadTemplate = () => {
     const token = localStorage.getItem('access_token');
@@ -113,6 +134,17 @@ export default function ImportProducts() {
       </div>
 
       {file && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <label className="input-label">Mode stok saat import</label>
+          <select className="input" value={stockMode} onChange={e => setStockMode(e.target.value)}>
+            <option value="replace_stock">Ganti stok (stok opname)</option>
+            <option value="add_stock">Tambah stok (barang datang)</option>
+            <option value="product_only">Produk & harga saja</option>
+          </select>
+        </div>
+      )}
+
+      {file && (
         <button className="btn btn-primary btn-lg" onClick={handleImport} disabled={loading} style={{ marginBottom: 24 }}>
           {loading
             ? <><span className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> Mengimport...</>
@@ -127,9 +159,9 @@ export default function ImportProducts() {
           <p className="font-headline" style={{ fontWeight: 800, fontSize: 16, marginBottom: 14 }}>Hasil Import</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
             {[
-              { label: 'Total Baris', value: result.total, color: 'var(--primary)' },
-              { label: 'Berhasil', value: result.success, color: '#1a7a3c', bg: '#d4f4e1' },
-              { label: 'Gagal', value: result.failed, color: result.failed > 0 ? 'var(--error)' : 'var(--outline)', bg: result.failed > 0 ? 'var(--error-container)' : 'var(--surface-container)' },
+              { label: 'Diproses', value: `${result.processed_rows || 0}/${result.total_rows || 0}`, color: 'var(--primary)' },
+              { label: 'Berhasil', value: result.success_rows || 0, color: '#1a7a3c', bg: '#d4f4e1' },
+              { label: 'Gagal', value: result.failed_rows || 0, color: result.failed_rows > 0 ? 'var(--error)' : 'var(--outline)', bg: result.failed_rows > 0 ? 'var(--error-container)' : 'var(--surface-container)' },
             ].map(m => (
               <div key={m.label} style={{ padding: '14px 12px', background: m.bg || 'var(--surface-container-low)', borderRadius: 10, textAlign: 'center' }}>
                 <div style={{ fontSize: 28, fontWeight: 800, color: m.color, fontFamily: 'Manrope,sans-serif' }}>{m.value}</div>
@@ -137,19 +169,9 @@ export default function ImportProducts() {
               </div>
             ))}
           </div>
-          {result.errors?.length > 0 && (
-            <div style={{ background: 'var(--error-container)', borderRadius: 8, padding: '12px 14px' }}>
-              <p style={{ fontWeight: 700, color: 'var(--error)', marginBottom: 8, fontSize: 13 }}>❌ Detail Error ({result.errors.length})</p>
-              <div style={{ maxHeight: 160, overflowY: 'auto' }}>
-                {result.errors.map((err, i) => (
-                  <div key={i} style={{ fontSize: 12, color: 'var(--on-error-container)', padding: '3px 0', borderBottom: '1px solid rgba(186,26,26,.1)' }}>
-                    {err}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {result.success > 0 && (
+          {result.status === 'processing' || result.status === 'queued' ? <p style={{ fontSize: 13, color: 'var(--outline)' }}>Status: {result.status}…</p> : null}
+          {result.failed_rows > 0 && <p style={{ fontSize: 12, color: 'var(--error)' }}>Ada {result.failed_rows} baris gagal. Detail error tersedia melalui API import job.</p>}
+          {result.success_rows > 0 && (
             <div style={{ marginTop: 14, display: 'flex', gap: 10 }}>
               <a href="/products" style={{ textDecoration: 'none' }}>
                 <button className="btn btn-primary">

@@ -148,6 +148,8 @@ func main() {
 
 	// ── Penting #9: Import Produk CSV ─────────────────────────────────────────
 	prot.Handle("/import/products", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ImportProductsCSV))).Methods("POST")
+	prot.Handle("/import/products/status", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetProductImportJob))).Methods("GET")
+	prot.Handle("/import/products/errors", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetProductImportErrors))).Methods("GET")
 	prot.Handle("/import/products/template", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.ExportProductsCSVTemplate))).Methods("GET")
 
 	// ── SPA ────────────────────────────────────────────────────────────────────
@@ -206,7 +208,7 @@ func main() {
 		fmt.Printf("📱 Buka kasir di HP via  : http://%s:%s\n", localIP, port)
 	}
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-	fmt.Println("🔑 Login default: admin / admin123")
+	fmt.Println("🔑 Login awal: admin / password dari INITIAL_ADMIN_PASSWORD")
 	fmt.Println()
 
 	go func() { time.Sleep(1 * time.Second); openBrowser("http://localhost:" + port) }()

@@ -162,7 +162,7 @@ export default function Login() {
           </div>
 
           <div style={{ marginTop: 24, padding: '12px 14px', background: 'var(--surface-container-low)', borderRadius: 10, border: '1px dashed var(--outline-variant)', fontSize: 13, color: 'var(--on-surface-variant)', textAlign: 'center' }}>
-            Login default: <strong style={{ color: 'var(--primary)' }}>admin</strong> / <strong style={{ color: 'var(--primary)' }}>admin123</strong>
+            Login awal: <strong style={{ color: 'var(--primary)' }}>admin</strong> / password yang diatur melalui <code>INITIAL_ADMIN_PASSWORD</code>
           </div>
         </form>
       </div>
