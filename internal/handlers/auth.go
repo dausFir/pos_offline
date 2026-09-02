@@ -16,6 +16,7 @@ import (
 
 // Login with refresh token
 func Login(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
 
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -24,10 +25,14 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	if req.Username == "" || req.Password == "" {
 		logLogin(0, req.Username, r, "failed", "username/password kosong")
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Username dan password wajib diisi"})
+		return
+	}
+	loginKey := getClientIP(r) + "|" + strings.ToLower(req.Username)
+	if !middleware.LoginAllowed(loginKey) {
+		writeJSON(w, http.StatusTooManyRequests, models.APIResponse{Success: false, Error: "Terlalu banyak percobaan login. Coba lagi 15 menit."})
 		return
 	}
 
@@ -39,16 +44,19 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		&user.AuditFields.Version, &user.AuditFields.CreatedAt, &user.AuditFields.UpdatedAt)
 
 	if err != nil {
+		middleware.RecordLoginFailure(loginKey)
 		logLogin(0, req.Username, r, "failed", "username tidak ditemukan")
 		writeJSON(w, http.StatusUnauthorized, models.APIResponse{Success: false, Error: "Username atau password salah"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		middleware.RecordLoginFailure(loginKey)
 		logLogin(user.ID, req.Username, r, "failed", "password salah")
 		writeJSON(w, http.StatusUnauthorized, models.APIResponse{Success: false, Error: "Username atau password salah"})
 		return
 	}
+	middleware.ClearLoginFailures(loginKey)
 
 	// Generate access & refresh tokens
 	accessToken, err := middleware.GenerateAccessToken(user)
@@ -88,7 +96,6 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		User:         user,
 		ExpiresIn:    int(middleware.AccessTokenDuration.Seconds()),
 	}
-
 
 	logLogin(user.ID, req.Username, r, "success", "")
 	writeJSON(w, http.StatusOK, models.APIResponse{
@@ -229,8 +236,8 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password lama dan baru wajib diisi"})
 		return
 	}
-	if len(req.NewPassword) < 6 {
-		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password baru minimal 6 karakter"})
+	if len(req.NewPassword) < 12 {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password baru minimal 12 karakter"})
 		return
 	}
 	var hash string
@@ -244,6 +251,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 		"UPDATE users SET password_hash=?, updated_at=?, updated_by=?, version=version+1 WHERE id=?",
 		string(newHash), time.Now(), claims.UserID, claims.UserID,
 	)
+	database.DB.Exec("UPDATE sessions SET is_active=0 WHERE user_id=?", claims.UserID)
 	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Message: "Password berhasil diubah"})
 }
 

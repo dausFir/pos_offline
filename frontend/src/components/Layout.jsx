@@ -36,13 +36,14 @@ const NAV_SECTIONS = [
     tk: 'nav.reports_sec',
     items: [
       { to: '/reports',         icon: 'analytics',       tk: 'nav.reports',     adminOnly: true },
-      { to: '/reports/shift',   icon: 'people',          tk: 'nav.shift_report',adminOnly: true },
+      { to: '/reports/shift',   icon: 'people',          tk: 'nav.shift_report' },
     ]
   },
   {
     tk: 'nav.system',
     items: [
       { to: '/settings',        icon: 'settings',        tk: 'nav.settings',    adminOnly: true },
+      { to: '/operations',      icon: 'shield',          tk: 'nav.operations',  superAdminOnly: true },
       { to: '/login-logs',      icon: 'manage_history',  tk: 'nav.login_logs',  adminOnly: true },
       { to: '/users',           icon: 'manage_accounts', tk: 'nav.users',       superAdminOnly: true },
     ]

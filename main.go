@@ -14,6 +14,7 @@ import (
 	"kasir-umkm/internal/database"
 	"kasir-umkm/internal/handlers"
 	"kasir-umkm/internal/middleware"
+	"kasir-umkm/internal/services"
 
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
@@ -42,8 +43,10 @@ func main() {
 	if err := database.Init("database.sqlite"); err != nil {
 		log.Fatalf("❌ Gagal inisialisasi database: %v", err)
 	}
+	services.StartBackupScheduler("database.sqlite")
 
 	r := mux.NewRouter()
+	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.CORSMiddleware)
 	api := r.PathPrefix("/api").Subrouter()
 
@@ -52,10 +55,12 @@ func main() {
 	api.HandleFunc("/refresh-token", handlers.RefreshToken).Methods("POST", "OPTIONS")
 	api.HandleFunc("/logout", handlers.Logout).Methods("POST", "OPTIONS")
 	api.HandleFunc("/status", handlers.GetServerStatus).Methods("GET", "OPTIONS") // Kritis #5 — no auth needed
+	api.HandleFunc("/health", handlers.GetHealth).Methods("GET", "OPTIONS")
 
 	// ── Protected ──────────────────────────────────────────────────────────────
 	prot := api.NewRoute().Subrouter()
 	prot.Use(middleware.AuthMiddleware)
+	prot.Use(middleware.AuditMiddleware)
 
 	prot.HandleFunc("/me", handlers.GetMe).Methods("GET")
 	prot.HandleFunc("/change-password", handlers.ChangePassword).Methods("POST") // Kritis #1
@@ -115,13 +120,21 @@ func main() {
 	prot.Handle("/settings/logo-image", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.DeleteLogoImage))).Methods("DELETE")
 
 	// Export
-	prot.Handle("/export/transactions", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportTransactionsCSV))).Methods("GET")
-	prot.Handle("/export/products", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportProductsCSV))).Methods("GET")
-	prot.Handle("/export/stock-mutations", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ExportStockMutationsCSV))).Methods("GET")
+	prot.Handle("/export/transactions", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.ExportTransactionsCSV))).Methods("GET")
+	prot.Handle("/export/products", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.ExportProductsCSV))).Methods("GET")
+	prot.Handle("/export/stock-mutations", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.ExportStockMutationsCSV))).Methods("GET")
 
 	// Backup / Restore
-	prot.Handle("/backup", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.BackupDatabase))).Methods("POST")
+	prot.Handle("/backup", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.BackupDatabase))).Methods("POST")
 	prot.Handle("/restore", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.RestoreDatabase))).Methods("POST")
+	prot.Handle("/diagnostics", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.GetDiagnostics))).Methods("GET")
+	prot.Handle("/audit-events", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.GetAuditEvents))).Methods("GET")
+
+	// Cash shift reconciliation
+	prot.Handle("/shifts/me", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetMyShift))).Methods("GET")
+	prot.Handle("/shifts/open", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.OpenShift))).Methods("POST")
+	prot.Handle("/shifts/close", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.CloseShift))).Methods("POST")
+	prot.Handle("/shifts", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetCashShifts))).Methods("GET")
 
 	// ── Penting #1: Laporan Shift ────────────────────────────────────────────────
 	prot.Handle("/reports/shift", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetShiftReport))).Methods("GET")

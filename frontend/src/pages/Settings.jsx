@@ -665,9 +665,9 @@ export default function Settings() {
             <p style={{ fontSize: 12, color: 'var(--outline)', marginBottom: 14, lineHeight: 1.6 }}>
               Buat backup terenkripsi. Password owner diperlukan lagi saat restore dan tidak disimpan aplikasi.
             </p>
-            <button className="btn btn-success w-full" onClick={handleBackup}>
+            {isSuperAdmin() ? <button className="btn btn-success w-full" onClick={handleBackup}>
               <Icon name="download" size={16} /> Download Backup Terenkripsi
-            </button>
+            </button> : <button className="btn btn-ghost w-full" disabled>🔒 Hanya Super Admin</button>}
           </div>
 
           {/* Restore */}

@@ -48,6 +48,7 @@ const MAP = {
   'more_horiz':          MoreHorizontal,
   'open_in_new':         ExternalLink,
   'keyboard':            Keyboard,
+  'shield':              ShieldCheck,
 
   // Store / commerce
   'storefront':          Store,

@@ -3,14 +3,33 @@ import api, { formatRupiah } from '../utils/api';
 import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
 import Icon from '../components/Icon';
+import { useAuth } from '../context/AuthContext';
 
 export default function ShiftReport() {
   const { t } = useI18n();
+	const { isAdmin } = useAuth();
   const today = new Date().toISOString().slice(0, 10);
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo,   setDateTo]   = useState(today);
   const [data,     setData]     = useState(null);
   const [loading,  setLoading]  = useState(false);
+	const [activeShift, setActiveShift] = useState(null);
+	const [shiftLoading, setShiftLoading] = useState(false);
+
+	const loadMyShift = async () => {
+		try { const res = await api.get('/shifts/me'); setActiveShift(res.data.data || null); } catch { /* keep page usable */ }
+	};
+	const openShift = async () => {
+		const raw = window.prompt('Kas awal shift (Rp):', '0'); if (raw === null) return;
+		const cash = Number(raw); if (!Number.isFinite(cash) || cash < 0) return toast.error('Kas awal tidak valid');
+		setShiftLoading(true); try { await api.post('/shifts/open', { cash, note: '' }); toast.success('Shift dibuka'); loadMyShift(); } catch (e) { toast.error(e.response?.data?.error || 'Gagal membuka shift'); } finally { setShiftLoading(false); }
+	};
+	const closeShift = async () => {
+		const raw = window.prompt('Kas fisik saat tutup shift (Rp):'); if (raw === null) return;
+		const cash = Number(raw); if (!Number.isFinite(cash) || cash < 0) return toast.error('Kas fisik tidak valid');
+		const note = window.prompt('Catatan selisih (opsional):', '') || '';
+		setShiftLoading(true); try { const res = await api.post('/shifts/close', { cash, note }); const d=res.data.data; toast.success(`Shift ditutup. Selisih: ${formatRupiah(d.difference)}`); loadMyShift(); if (isAdmin()) fetch(); } catch (e) { toast.error(e.response?.data?.error || 'Gagal menutup shift'); } finally { setShiftLoading(false); }
+	};
 
   const fetch = async () => {
     if (dateTo < dateFrom) {
@@ -25,7 +44,7 @@ export default function ShiftReport() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetch(); }, []);
+	useEffect(() => { loadMyShift(); if (isAdmin()) fetch(); }, []);
 
   const maxRev = data?.reports?.length ? Math.max(...data.reports.map(r => r.total_revenue), 1) : 1;
 
@@ -50,7 +69,12 @@ export default function ShiftReport() {
         </div>
       </div>
 
-      {data && (
+	  <section className="card" style={{ marginBottom: 22, display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, flexWrap:'wrap' }}>
+		<div><h2 style={{ fontSize:16, fontWeight:800 }}>Shift Kasir</h2><p style={{ fontSize:13, color:'var(--outline)', marginTop:4 }}>{activeShift ? `Aktif sejak ${activeShift.opened_at} · Kas awal ${formatRupiah(activeShift.opening_cash)}` : 'Belum ada shift aktif'}</p></div>
+		{activeShift ? <button className="btn btn-danger" disabled={shiftLoading} onClick={closeShift}>Tutup Shift</button> : <button className="btn btn-success" disabled={shiftLoading} onClick={openShift}>Buka Shift</button>}
+	  </section>
+
+	  {isAdmin() && data && (
         <>
           {/* Summary row */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:14, marginBottom:24 }}>

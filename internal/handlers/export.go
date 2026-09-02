@@ -257,6 +257,11 @@ func RestoreDatabase(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menulis database hasil restore"})
 		return
 	}
+	if err := database.ValidateSQLiteFile("database.sqlite.restore"); err != nil {
+		_ = os.Remove("database.sqlite.restore")
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Database backup gagal validasi integritas"})
+		return
+	}
 	if err := os.Rename("database.sqlite", "database.sqlite.bak"); err != nil {
 		_ = os.Remove("database.sqlite.restore")
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menyiapkan restore database"})

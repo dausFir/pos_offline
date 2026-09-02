@@ -133,6 +133,7 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 ### Checklist Keamanan Produksi
 - ✅ **Set JWT_SECRET** environment variable (minimum 32 karakter)
+- ✅ **Set AUDIT_HMAC_KEY** terpisah (minimum 32 karakter) untuk melindungi rantai audit.
 - ✅ **Set `INITIAL_ADMIN_PASSWORD`** saat membuat database baru.
 - ✅ **Firewall setup**: Batasi akses port 8080 hanya dari LAN
 - ✅ **Database backup**: Backup rutin file `database.sqlite`
@@ -346,7 +347,15 @@ kasir-umkm_v3.4/
 | `GET` | `/api/export/transactions` | admin+ | Export transaksi ke CSV |
 | `GET` | `/api/export/products` | admin+ | Export produk ke CSV |
 | `GET` | `/api/export/stock-mutations` | admin+ | Export stock mutations ke CSV |
-| `POST` | `/api/backup` | admin+ | Download backup database terenkripsi `.posbak` |
+| `POST` | `/api/backup` | super_admin | Download backup database terenkripsi `.posbak` |
+
+### Kontrol Operasional & Keamanan
+
+- **Audit trail hash-chained** mencatat aksi perubahan data, backup/restore, dan export; hanya `super_admin` dapat melihatnya.
+- **Backup otomatis opsional**: atur `AUTO_BACKUP_PASSWORD` (minimal 12 karakter), `BACKUP_DIRECTORY`, serta `BACKUP_RETENTION_DAYS`. Aplikasi membuat `.posbak` terenkripsi setiap hari pukul 02:00.
+- **Tutup shift kasir**: buka shift dengan kas awal dan tutup dengan kas fisik; aplikasi menghitung kas harapan serta selisih.
+- **Login protection**: lima kegagalan login untuk kombinasi IP dan username akan dikunci selama 15 menit.
+- **Diagnostik**: `GET /api/diagnostics` untuk super admin memeriksa integritas SQLite, rantai audit, ukuran database, dan backup otomatis terakhir.
 
 ### Permission Levels:
 - ✅ **All** = Authenticated users (kasir, admin, super_admin)

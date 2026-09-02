@@ -18,6 +18,7 @@ import Customers      from './pages/Customers';
 import Suppliers      from './pages/Suppliers';
 import ShiftReport    from './pages/ShiftReport';
 import ImportProducts from './pages/ImportProducts';
+import Operations     from './pages/Operations';
 import Layout         from './components/Layout';
 
 function Guard({ children, adminOnly = false, superAdminOnly = false }) {
@@ -58,13 +59,14 @@ function AppRoutes() {
         <Route path="stock"           element={<Guard adminOnly><StockMutations /></Guard>} />
         <Route path="transactions"    element={<Guard adminOnly><Transactions /></Guard>} />
         <Route path="reports"         element={<Guard adminOnly><Reports /></Guard>} />
-        <Route path="reports/shift"   element={<Guard adminOnly><ShiftReport /></Guard>} />
+        <Route path="reports/shift"   element={<Guard><ShiftReport /></Guard>} />
         <Route path="customers"       element={<Guard adminOnly><Customers /></Guard>} />
         <Route path="suppliers"       element={<Guard adminOnly><Suppliers /></Guard>} />
         <Route path="discounts"       element={<Guard adminOnly><Discounts /></Guard>} />
         <Route path="settings"        element={<Guard adminOnly><Settings /></Guard>} />
         <Route path="login-logs"      element={<Guard adminOnly><LoginLogs /></Guard>} />
         <Route path="users"           element={<Guard adminOnly><Users /></Guard>} />
+        <Route path="operations"      element={<Guard superAdminOnly><Operations /></Guard>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -6,10 +6,12 @@ import (
 	"net/http"
 
 	"kasir-umkm/internal/database"
+	"kasir-umkm/internal/middleware"
 	"kasir-umkm/internal/models"
 )
 
 func GetSettings(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
 	ppn := 0.0
 	if v := database.GetSetting("ppn_percent", "0"); v != "" {
 		fmt.Sscanf(v, "%f", &ppn)
@@ -51,6 +53,12 @@ func GetSettings(w http.ResponseWriter, r *http.Request) {
 		EnableDana:      parseBool("enable_dana", "false"),
 		EnableLinkAja:   parseBool("enable_linkaja", "false"),
 		EnableShopeePay: parseBool("enable_shopee_pay", "false"),
+	}
+	// Cashiers need store/payment display settings, but must never receive
+	// provider server keys from the local API response.
+	if claims != nil && claims.Role == "cashier" {
+		settings.XenditAPIKey = ""
+		settings.MidtransServerKey = ""
 	}
 	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: settings})
 }

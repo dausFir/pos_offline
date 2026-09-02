@@ -16,6 +16,9 @@ var DB *sql.DB
 const AppVersion = "3.0.0"
 
 func Init(dbPath string) error {
+	if os.Getenv("GO_ENV") == "production" && len(os.Getenv("AUDIT_HMAC_KEY")) < 32 {
+		return fmt.Errorf("AUDIT_HMAC_KEY wajib di-set (minimal 32 karakter) saat production")
+	}
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_foreign_keys=on&_busy_timeout=10000")
 	if err != nil {
@@ -66,6 +69,31 @@ func Init(dbPath string) error {
 
 	log.Printf("✅ Database siap (v%s)", AppVersion)
 	return nil
+}
+
+// ValidateSQLiteFile validates a restored database before it replaces the live one.
+func ValidateSQLiteFile(path string) error {
+	db, err := sql.Open("sqlite3", "file:"+path+"?mode=ro&_foreign_keys=on")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	var integrity string
+	if err = db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil {
+		return err
+	}
+	if integrity != "ok" {
+		return fmt.Errorf("integrity_check: %s", integrity)
+	}
+	rows, err := db.Query("PRAGMA foreign_key_check")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return fmt.Errorf("foreign_key_check gagal")
+	}
+	return rows.Err()
 }
 
 func createTables() error {
@@ -204,6 +232,20 @@ func createTables() error {
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_by INTEGER  REFERENCES users(id)
 	);
+
+	CREATE TABLE IF NOT EXISTS audit_events (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id    INTEGER REFERENCES users(id),
+		username   TEXT NOT NULL DEFAULT '',
+		action     TEXT NOT NULL,
+		resource   TEXT NOT NULL DEFAULT '',
+		detail     TEXT NOT NULL DEFAULT '',
+		prev_hash  TEXT NOT NULL DEFAULT '',
+		event_hash TEXT NOT NULL,
+		created_at DATETIME NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_audit_events_created ON audit_events(created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_events_user ON audit_events(user_id, created_at DESC);
 
 	-- Indexes
 	CREATE INDEX IF NOT EXISTS idx_products_barcode    ON products(barcode_sku)        WHERE is_deleted=0;
@@ -506,6 +548,23 @@ func createImportantTables() error {
 	CREATE INDEX IF NOT EXISTS idx_sessions_token_hash     ON sessions(refresh_token_hash);
 	CREATE INDEX IF NOT EXISTS idx_sessions_expires        ON sessions(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_sessions_active         ON sessions(is_active, expires_at);
+
+	CREATE TABLE IF NOT EXISTS cash_shifts (
+		id             INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id        INTEGER NOT NULL REFERENCES users(id),
+		opening_cash   REAL NOT NULL CHECK(opening_cash >= 0),
+		expected_cash  REAL NOT NULL DEFAULT 0,
+		counted_cash   REAL,
+		difference     REAL,
+		open_note      TEXT NOT NULL DEFAULT '',
+		close_note     TEXT NOT NULL DEFAULT '',
+		status         TEXT NOT NULL CHECK(status IN ('open','closed')) DEFAULT 'open',
+		opened_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		closed_at      DATETIME,
+		closed_by      INTEGER REFERENCES users(id)
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_cash_shifts_one_open_user ON cash_shifts(user_id) WHERE status='open';
+	CREATE INDEX IF NOT EXISTS idx_cash_shifts_status ON cash_shifts(status, opened_at DESC);
 
 	CREATE TABLE IF NOT EXISTS import_jobs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
