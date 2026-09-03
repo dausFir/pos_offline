@@ -54,6 +54,7 @@ type Product struct {
 	StockMin     int           `json:"stock_min"` // threshold per-produk
 	Profit       float64       `json:"profit"`    // computed: sell - buy
 	MarginPct    float64       `json:"margin_pct"`
+	ItemType     string        `json:"item_type"` // physical | service
 	AuditFields
 }
 
@@ -256,6 +257,7 @@ type ProductRequest struct {
 	SellPrice  float64 `json:"sell_price"`
 	Stock      int     `json:"stock"`
 	StockMin   int     `json:"stock_min"`
+	ItemType   string  `json:"item_type"`
 }
 
 type UserRequest struct {
@@ -495,4 +497,76 @@ type CheckoutRequestV3 struct {
 	DiscountCode    string         `json:"discount_code"`
 	CustomerID      int64          `json:"customer_id"`
 	OnCredit        bool           `json:"on_credit"` // bayar nanti (hutang)
+	ServiceOrderID  int64          `json:"service_order_id"`
 }
+
+// ── Service orders ──────────────────────────────────────────────────────────
+// A service order is a work document. It remains separate from a sale invoice so
+// spare-part stock is only reduced once the owner/cashier finalises payment.
+type ServiceOrder struct {
+	ID              int64          `json:"id"`
+	OrderNumber     string         `json:"order_number"`
+	CustomerID      sql.NullInt64  `json:"-"`
+	CustomerIDv     int64          `json:"customer_id"`
+	CustomerName    string         `json:"customer_name,omitempty"`
+	CustomerPhone   string         `json:"customer_phone,omitempty"`
+	ItemName        string         `json:"item_name"`
+	ServiceProductID int64         `json:"service_product_id"`
+	ItemBrand       string         `json:"item_brand,omitempty"`
+	ItemSerial      string         `json:"item_serial,omitempty"`
+	Complaint       string         `json:"complaint"`
+	Diagnosis       string         `json:"diagnosis,omitempty"`
+	Status          string         `json:"status"`
+	TechnicianID    sql.NullInt64  `json:"-"`
+	TechnicianIDv   int64          `json:"technician_id"`
+	TechnicianName  string         `json:"technician_name,omitempty"`
+	EstimatedCost   float64        `json:"estimated_cost"`
+	DepositAmount   float64        `json:"deposit_amount"`
+	DueAt           sql.NullTime   `json:"-"`
+	DueAtValue      string         `json:"due_at,omitempty"`
+	TrackingToken   string         `json:"tracking_token,omitempty"`
+	InvoiceID       sql.NullInt64  `json:"-"`
+	InvoiceNumber   string         `json:"invoice_number,omitempty"`
+	Notes           string         `json:"notes,omitempty"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+	Progress        []ServiceProgress `json:"progress,omitempty"`
+	Parts           []ServicePart  `json:"parts,omitempty"`
+}
+
+type ServiceProgress struct {
+	ID int64 `json:"id"`
+	ServiceOrderID int64 `json:"service_order_id"`
+	Status string `json:"status"`
+	Note string `json:"note"`
+	ActorName string `json:"actor_name,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type ServicePart struct {
+	ID int64 `json:"id"`
+	ServiceOrderID int64 `json:"service_order_id"`
+	ProductID int64 `json:"product_id"`
+	ProductName string `json:"product_name,omitempty"`
+	Quantity int `json:"quantity"`
+	UnitPrice float64 `json:"unit_price"`
+	Subtotal float64 `json:"subtotal"`
+}
+
+type ServiceOrderRequest struct {
+	CustomerID int64 `json:"customer_id"`
+	ServiceProductID int64 `json:"service_product_id"`
+	ItemName string `json:"item_name"`
+	ItemBrand string `json:"item_brand"`
+	ItemSerial string `json:"item_serial"`
+	Complaint string `json:"complaint"`
+	Diagnosis string `json:"diagnosis"`
+	TechnicianID int64 `json:"technician_id"`
+	EstimatedCost float64 `json:"estimated_cost"`
+	DepositAmount float64 `json:"deposit_amount"`
+	DueAt string `json:"due_at"`
+	Notes string `json:"notes"`
+}
+
+type ServiceStatusRequest struct { Status string `json:"status"`; Note string `json:"note"`; TechnicianID int64 `json:"technician_id"` }
+type ServicePartRequest struct { ProductID int64 `json:"product_id"`; Quantity int `json:"quantity"`; UnitPrice float64 `json:"unit_price"` }

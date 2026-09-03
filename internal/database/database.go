@@ -136,6 +136,7 @@ func createTables() error {
 		sell_price      REAL     NOT NULL DEFAULT 0,
 		stock           INTEGER  NOT NULL DEFAULT 0,
 		stock_min       INTEGER  NOT NULL DEFAULT 5,
+		item_type       TEXT     NOT NULL DEFAULT 'physical' CHECK(item_type IN ('physical','service')),
 		is_deleted      INTEGER  NOT NULL DEFAULT 0,
 		version         INTEGER  NOT NULL DEFAULT 1,
 		created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -592,6 +593,67 @@ func createImportantTables() error {
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_import_job_errors_job ON import_job_errors(import_job_id, row_number);
+
+	-- Service business: work order, progress log, selected spare parts and a
+	-- durable outbox.  The outbox is deliberately local-first: failed internet
+	-- delivery never blocks a technician from updating an order.
+	CREATE TABLE IF NOT EXISTS service_order_sequence (
+		date_key TEXT PRIMARY KEY,
+		last_seq INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE TABLE IF NOT EXISTS service_orders (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		order_number TEXT NOT NULL UNIQUE,
+		customer_id INTEGER REFERENCES customers(id),
+		service_product_id INTEGER REFERENCES products(id),
+		item_name TEXT NOT NULL,
+		item_brand TEXT NOT NULL DEFAULT '',
+		item_serial TEXT NOT NULL DEFAULT '',
+		complaint TEXT NOT NULL DEFAULT '',
+		diagnosis TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'received' CHECK(status IN ('received','diagnosis','awaiting_approval','awaiting_parts','in_progress','ready','completed','cancelled')),
+		technician_id INTEGER REFERENCES users(id),
+		estimated_cost REAL NOT NULL DEFAULT 0,
+		deposit_amount REAL NOT NULL DEFAULT 0,
+		due_at DATETIME,
+		tracking_token TEXT NOT NULL UNIQUE,
+		invoice_id INTEGER REFERENCES transactions(id),
+		notes TEXT NOT NULL DEFAULT '',
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_service_orders_status ON service_orders(status, updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_service_orders_customer ON service_orders(customer_id, created_at DESC);
+	CREATE TABLE IF NOT EXISTS service_progress (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		service_order_id INTEGER NOT NULL REFERENCES service_orders(id),
+		status TEXT NOT NULL,
+		note TEXT NOT NULL DEFAULT '',
+		actor_id INTEGER REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_service_progress_order ON service_progress(service_order_id, created_at);
+	CREATE TABLE IF NOT EXISTS service_parts (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		service_order_id INTEGER NOT NULL REFERENCES service_orders(id),
+		product_id INTEGER NOT NULL REFERENCES products(id),
+		quantity INTEGER NOT NULL CHECK(quantity > 0),
+		unit_price REAL NOT NULL DEFAULT 0,
+		UNIQUE(service_order_id, product_id)
+	);
+	CREATE TABLE IF NOT EXISTS tracking_outbox (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		event_id TEXT NOT NULL UNIQUE,
+		service_order_id INTEGER NOT NULL REFERENCES service_orders(id),
+		payload TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sent','failed')),
+		attempts INTEGER NOT NULL DEFAULT 0,
+		last_error TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		sent_at DATETIME
+	);
+	CREATE INDEX IF NOT EXISTS idx_tracking_outbox_pending ON tracking_outbox(status, created_at);
 	`
 	_, err := DB.Exec(schema)
 	return err
@@ -606,6 +668,9 @@ func runImportantMigrations() error {
 		`CREATE INDEX IF NOT EXISTS idx_transactions_customer ON transactions(customer_id) WHERE customer_id IS NOT NULL`,
 		`ALTER TABLE sessions ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(is_active, expires_at)`,
+		`ALTER TABLE products ADD COLUMN item_type TEXT NOT NULL DEFAULT 'physical'`,
+		`ALTER TABLE service_orders ADD COLUMN service_product_id INTEGER REFERENCES products(id)`,
+		`CREATE INDEX IF NOT EXISTS idx_products_item_type ON products(item_type) WHERE is_deleted=0`,
 	}
 	for _, s := range stmts {
 		DB.Exec(s)

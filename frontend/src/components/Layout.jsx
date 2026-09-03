@@ -29,6 +29,7 @@ const NAV_SECTIONS = [
     tk: 'nav.sales',
     items: [
       { to: '/transactions',    icon: 'receipt_long',    tk: 'nav.transactions',adminOnly: true },
+	  { to: '/service-orders',  icon: 'build',            tk: 'Order Servis',     always: true },
       { to: '/customers',       icon: 'group',           tk: 'nav.customers',   adminOnly: true },
       { to: '/discounts',       icon: 'sell',            tk: 'nav.discounts',   adminOnly: true },
     ]

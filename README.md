@@ -150,6 +150,21 @@ Impor diproses asynchronous dalam chunk 100 baris agar aman untuk SQLite. Piliha
 
 Status job dan detail error tersedia setelah impor selesai.
 
+## Lini Jasa & Service Order
+
+Master **Produk** sekarang mendukung dua tipe item: `Barang fisik` dan `Jasa / layanan`. Jasa tidak memiliki stok dan tidak akan membuat mutasi stok saat dijual. Hanya admin/owner yang dapat membuat master jasa.
+
+Alur operasional: buat master jasa → terima order di menu **Order Servis** → masukkan progres teknisi dan sparepart → finalkan saat pembayaran. Sparepart hanya menjadi estimasi pada order; stok dan invoice baru diproses sekali saat tombol **Finalkan & Buat Invoice** dijalankan. Perhitungan PPN, diskon, dan metode pembayaran tetap memakai aturan checkout yang sama dengan penjualan barang.
+
+Setiap order memiliki token tracking acak. Untuk mengaktifkan halaman pelacakan publik di repo `pos-service-tracking`, set konfigurasi berikut pada aplikasi POS dan environment Vercel dengan secret yang sama:
+
+```dotenv
+TRACKING_SYNC_URL=https://your-tracker.vercel.app/api/sync
+TRACKING_SYNC_SECRET=secret-panjang-minimal-24-karakter
+```
+
+POS menyimpan perubahan secara lokal terlebih dahulu di outbox, lalu mencoba sinkronisasi otomatis saat internet tersedia. Kegagalan tracking tidak menghambat kasir/teknisi. Jangan membuka file SQLite atau API POS ke internet.
+
 ## Backup dan Restore
 
 1. Super admin membuka **Pengaturan** lalu memilih backup.
@@ -167,6 +182,9 @@ Jika `AUTO_BACKUP_PASSWORD` diset, aplikasi membuat backup otomatis di direktori
 | `POST` | `/api/refresh-token` | Public | Rotasi access/refresh token |
 | `GET` | `/api/health` | Public | Health check database |
 | `POST` | `/api/checkout` | Semua role | Checkout POS |
+| `GET/POST` | `/api/service-orders` | Semua role | Daftar dan buat order jasa |
+| `POST` | `/api/service-orders/{id}/status` | Semua role | Catat progres kerja |
+| `POST` | `/api/service-orders/{id}/parts` | Semua role | Tambahkan sparepart estimasi |
 | `POST` | `/api/import/products` | Admin+ | Membuat job impor produk batch |
 | `GET` | `/api/import/products/status` | Admin+ | Status job impor |
 | `POST` | `/api/shifts/open` | Semua role | Membuka shift kasir |

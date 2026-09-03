@@ -47,6 +47,7 @@ func main() {
 		log.Fatalf("❌ Gagal inisialisasi lisensi: %v", err)
 	}
 	services.StartBackupScheduler("database.sqlite")
+	services.StartTrackingSyncScheduler()
 
 	r := mux.NewRouter()
 	r.Use(middleware.SecurityHeaders)
@@ -92,6 +93,14 @@ func main() {
 	prot.Handle("/transactions", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetTransactions))).Methods("GET")
 	prot.Handle("/transactions/{id}", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetTransaction))).Methods("GET")
 	prot.Handle("/transactions/{id}/cancel", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.CancelTransaction))).Methods("POST")
+
+	// Service orders: work progress stays offline-first; public tracking is sent
+	// through the local outbox only when TRACKING_SYNC_URL/SECRET are configured.
+	prot.Handle("/service-orders", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetServiceOrders))).Methods("GET")
+	prot.Handle("/service-orders", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.CreateServiceOrder))).Methods("POST")
+	prot.Handle("/service-orders/{id}", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetServiceOrder))).Methods("GET")
+	prot.Handle("/service-orders/{id}/status", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.UpdateServiceStatus))).Methods("POST")
+	prot.Handle("/service-orders/{id}/parts", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.AddServicePart))).Methods("POST")
 
 	// Dashboard
 	prot.Handle("/dashboard/stats", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetDashboardStats))).Methods("GET")

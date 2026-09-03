@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"kasir-umkm/internal/database"
 	"kasir-umkm/internal/middleware"
 	"kasir-umkm/internal/models"
+	"kasir-umkm/internal/services"
 
 	"github.com/gorilla/mux"
 )
@@ -23,7 +25,7 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Request tidak valid"})
 		return
 	}
-	if len(req.Items) == 0 {
+	if len(req.Items) == 0 && req.ServiceOrderID <= 0 {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Keranjang belanja kosong"})
 		return
 	}
@@ -57,9 +59,19 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		qty                           int
 		unitPrice, subtotal, buyPrice float64
 		catName                       string
+		itemType                      string
 	}
 	var details []itemDetail
 	var subtotalBeforeDiscount float64
+
+	if req.ServiceOrderID > 0 {
+		var serviceProductID int64; var customerID, invoiceID sql.NullInt64
+		if err:=tx.QueryRow("SELECT service_product_id,customer_id,invoice_id FROM service_orders WHERE id=?",req.ServiceOrderID).Scan(&serviceProductID,&customerID,&invoiceID);err!=nil||serviceProductID==0 { writeJSON(w,404,models.APIResponse{Success:false,Error:"Order servis tidak ditemukan"});return }
+		if invoiceID.Valid { writeJSON(w,400,models.APIResponse{Success:false,Error:"Order servis sudah ditagihkan"});return }
+		req.Items=[]models.CheckoutItem{{ProductID:serviceProductID,Quantity:1}}
+		rows,err:=tx.Query("SELECT product_id,quantity FROM service_parts WHERE service_order_id=?",req.ServiceOrderID);if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal membaca sparepart"});return};for rows.Next(){var part models.CheckoutItem;rows.Scan(&part.ProductID,&part.Quantity);req.Items=append(req.Items,part)};rows.Close()
+		if req.CustomerID==0&&customerID.Valid { req.CustomerID=customerID.Int64 }
+	}
 
 	itemsByProduct := make(map[int64]int, len(req.Items))
 	for _, item := range req.Items {
@@ -74,15 +86,15 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		var p models.Product
 		var catName string
 		scanErr := tx.QueryRow(
-			`SELECT p.id, p.barcode_sku, p.name, COALESCE(c.name,''), p.buy_price, p.sell_price, p.stock
+			`SELECT p.id, p.barcode_sku, p.name, COALESCE(c.name,''), p.buy_price, p.sell_price, p.stock, p.item_type
 			 FROM products p LEFT JOIN categories c ON p.category_id=c.id
 			 WHERE p.id=? AND p.is_deleted=0`, productID,
-		).Scan(&p.ID, &p.BarcodeSKU, &p.Name, &catName, &p.BuyPrice, &p.SellPrice, &p.Stock)
+		).Scan(&p.ID, &p.BarcodeSKU, &p.Name, &catName, &p.BuyPrice, &p.SellPrice, &p.Stock, &p.ItemType)
 		if scanErr != nil {
 			writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: fmt.Sprintf("Produk ID %d tidak ditemukan", productID)})
 			return
 		}
-		if p.Stock < quantity {
+		if p.ItemType == "physical" && p.Stock < quantity {
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Stok %s tidak cukup (tersedia: %d)", p.Name, p.Stock)})
 			return
 		}
@@ -94,7 +106,7 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		}
 		sub := unitPrice * float64(quantity)
 		subtotalBeforeDiscount += sub
-		details = append(details, itemDetail{product: p, qty: quantity, unitPrice: unitPrice, subtotal: sub, buyPrice: p.BuyPrice, catName: catName})
+		details = append(details, itemDetail{product: p, qty: quantity, unitPrice: unitPrice, subtotal: sub, buyPrice: p.BuyPrice, catName: catName, itemType:p.ItemType})
 	}
 
 	// Validate discount
@@ -243,6 +255,10 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal simpan detail"})
 			return
 		}
+		if d.itemType != "physical" {
+			txDetails = append(txDetails, models.TransactionDetail{TransactionID:txID, ProductID:d.product.ID, ProductName:d.product.Name, CategoryName:d.catName, Quantity:d.qty, UnitPrice:d.unitPrice, BuyPrice:d.buyPrice, Subtotal:d.subtotal, Profit:d.subtotal-d.buyPrice*float64(d.qty)})
+			continue
+		}
 
 		stockBefore := d.product.Stock
 		stockResult, err := tx.Exec("UPDATE products SET stock=stock-?,updated_at=?,updated_by=?,version=version+1 WHERE id=? AND stock>=? AND is_deleted=0",
@@ -282,11 +298,19 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.ServiceOrderID > 0 {
+		result, err := tx.Exec("UPDATE service_orders SET invoice_id=?,status='completed',updated_at=? WHERE id=? AND invoice_id IS NULL", txID, now, req.ServiceOrderID)
+		if err != nil { writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal menautkan invoice servis"});return }
+		if affected,_:=result.RowsAffected();affected!=1 { writeJSON(w,409,models.APIResponse{Success:false,Error:"Order servis sudah berubah"});return }
+		tx.Exec("INSERT INTO service_progress(service_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?)",req.ServiceOrderID,"completed","Invoice "+invoice+" dibuat",claims.UserID,now)
+		queueTracking(tx, req.ServiceOrderID)
+	}
 
 	if err = tx.Commit(); err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal commit"})
 		return
 	}
+	if req.ServiceOrderID > 0 { services.TriggerTrackingSync() }
 
 	writeJSON(w, http.StatusCreated, models.APIResponse{
 		Success: true, Message: "Transaksi berhasil",
@@ -325,7 +349,7 @@ func CancelTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, _ := database.DB.Query("SELECT product_id, quantity FROM transaction_details WHERE transaction_id=?", id)
+	rows, _ := database.DB.Query("SELECT td.product_id, td.quantity FROM transaction_details td JOIN products p ON p.id=td.product_id WHERE td.transaction_id=? AND p.item_type='physical'", id)
 	type detRow struct {
 		pid int64
 		qty int
@@ -352,6 +376,9 @@ func CancelTransaction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal cancel"})
 		return
 	}
+	// A cancelled service invoice returns the work order to ready-to-bill. Its
+	// physical spare parts are restored by the regular detail loop below.
+	tx.Exec("UPDATE service_orders SET invoice_id=NULL,status='ready',updated_at=? WHERE invoice_id=?", now, id)
 
 	for _, d := range drows {
 		var sb int

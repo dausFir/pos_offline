@@ -5,7 +5,7 @@ import { useI18n } from '../context/I18nContext';
 import toast from 'react-hot-toast';
 import Icon from '../components/Icon';
 
-const emptyForm = { barcode_sku: '', name: '', category_id: '0', buy_price: '', sell_price: '', stock: '', stock_min: '5' };
+const emptyForm = { barcode_sku: '', name: '', category_id: '0', buy_price: '', sell_price: '', stock: '', stock_min: '5', item_type: 'physical' };
 
 export default function Products() {
   const { t } = useI18n();
@@ -59,6 +59,7 @@ export default function Products() {
       category_id: String(p.category_id || '0'),
       buy_price: String(p.buy_price), sell_price: String(p.sell_price),
       stock: String(p.stock), stock_min: String(p.stock_min ?? 5),
+	  item_type: p.item_type || 'physical',
     });
     setShowModal(true);
   };
@@ -82,6 +83,7 @@ export default function Products() {
         sell_price: parseFloat(form.sell_price) || 0,
         stock: parseInt(form.stock) || 0,
         stock_min: parseInt(form.stock_min) ?? 5,
+		item_type: form.item_type,
       };
       if (editItem) {
         await api.put(`/products/${editItem.id}`, payload);
@@ -277,6 +279,12 @@ export default function Products() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="input-group" style={{ gridColumn: '1/-1' }}>
+					<label className="input-label">Tipe Item</label>
+					<select className="input" value={form.item_type} onChange={e => setForm(f => ({ ...f, item_type: e.target.value, stock: e.target.value === 'service' ? '0' : f.stock, stock_min: e.target.value === 'service' ? '0' : f.stock_min }))}>
+					  <option value="physical">Barang fisik (stok dikelola)</option><option value="service">Jasa / layanan (tanpa stok)</option>
+					</select>
+				  </div>
+				  <div className="input-group" style={{ gridColumn: '1/-1' }}>
                     <label className="input-label">Barcode / SKU *</label>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input className="input mono" style={{ letterSpacing: 1, flex: 1 }} placeholder="cth: 8991234567890"
@@ -304,7 +312,7 @@ export default function Products() {
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
-                  <div className="input-group">
+				  <div className="input-group">
                     <label className="input-label">Harga Beli (Rp)</label>
                     <input className="input mono" type="number" placeholder="0"
                       value={form.buy_price} onChange={e => setForm(f => ({ ...f, buy_price: e.target.value }))} />
@@ -313,12 +321,13 @@ export default function Products() {
                     <label className="input-label">Harga Jual (Rp)</label>
                     <input className="input mono" type="number" placeholder="0"
                       value={form.sell_price} onChange={e => setForm(f => ({ ...f, sell_price: e.target.value }))} />
-                  </div>
+				  </div>
+				  {form.item_type === 'physical' && <>
                   <div className="input-group">
                     <label className="input-label">Stok Awal</label>
                     <input className="input mono" type="number" placeholder="0"
                       value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} />
-                  </div>
+				  </div></>}
                   <div className="input-group">
                     <label className="input-label" style={{ color: 'var(--error)' }}>Min. Stok (Threshold)</label>
                     <input className="input mono" type="number" min="0" placeholder="5"

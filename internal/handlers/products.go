@@ -44,7 +44,7 @@ func GetProducts(w http.ResponseWriter, r *http.Request) {
 
 	q := `SELECT p.id, p.barcode_sku, p.name,
 		COALESCE(p.category_id,0), COALESCE(c.name,''),
-		p.buy_price, p.sell_price, p.stock, p.stock_min,
+		p.buy_price, p.sell_price, p.stock, p.stock_min, p.item_type,
 		p.version, p.created_at, p.updated_at ` + base + " ORDER BY p.name LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
@@ -57,7 +57,7 @@ func GetProducts(w http.ResponseWriter, r *http.Request) {
 		var p models.Product
 		rows.Scan(&p.ID, &p.BarcodeSKU, &p.Name,
 			&p.CategoryIDv, &p.CategoryName,
-			&p.BuyPrice, &p.SellPrice, &p.Stock, &p.StockMin,
+			&p.BuyPrice, &p.SellPrice, &p.Stock, &p.StockMin, &p.ItemType,
 			&p.AuditFields.Version, &p.AuditFields.CreatedAt, &p.AuditFields.UpdatedAt)
 		p.Profit    = p.SellPrice - p.BuyPrice
 		if p.BuyPrice > 0 { p.MarginPct = p.Profit / p.BuyPrice * 100 }
@@ -72,11 +72,11 @@ func GetProductByBarcode(w http.ResponseWriter, r *http.Request) {
 	var p models.Product
 	err := database.DB.QueryRow(
 		`SELECT p.id, p.barcode_sku, p.name, COALESCE(p.category_id,0), COALESCE(c.name,''),
-		 p.buy_price, p.sell_price, p.stock, p.stock_min, p.version, p.created_at, p.updated_at
+		 p.buy_price, p.sell_price, p.stock, p.stock_min, p.item_type, p.version, p.created_at, p.updated_at
 		 FROM products p LEFT JOIN categories c ON p.category_id=c.id
 		 WHERE p.barcode_sku=? AND p.is_deleted=0`, barcode,
 	).Scan(&p.ID, &p.BarcodeSKU, &p.Name, &p.CategoryIDv, &p.CategoryName,
-		&p.BuyPrice, &p.SellPrice, &p.Stock, &p.StockMin,
+		&p.BuyPrice, &p.SellPrice, &p.Stock, &p.StockMin, &p.ItemType,
 		&p.AuditFields.Version, &p.AuditFields.CreatedAt, &p.AuditFields.UpdatedAt)
 	if err != nil { writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: "Produk tidak ditemukan"}); return }
 	p.Profit = p.SellPrice - p.BuyPrice
@@ -89,11 +89,11 @@ func GetProduct(w http.ResponseWriter, r *http.Request) {
 	var p models.Product
 	err := database.DB.QueryRow(
 		`SELECT p.id, p.barcode_sku, p.name, COALESCE(p.category_id,0), COALESCE(c.name,''),
-		 p.buy_price, p.sell_price, p.stock, p.stock_min, p.version, p.created_at, p.updated_at
+		 p.buy_price, p.sell_price, p.stock, p.stock_min, p.item_type, p.version, p.created_at, p.updated_at
 		 FROM products p LEFT JOIN categories c ON p.category_id=c.id
 		 WHERE p.id=? AND p.is_deleted=0`, id,
 	).Scan(&p.ID, &p.BarcodeSKU, &p.Name, &p.CategoryIDv, &p.CategoryName,
-		&p.BuyPrice, &p.SellPrice, &p.Stock, &p.StockMin,
+		&p.BuyPrice, &p.SellPrice, &p.Stock, &p.StockMin, &p.ItemType,
 		&p.AuditFields.Version, &p.AuditFields.CreatedAt, &p.AuditFields.UpdatedAt)
 	if err != nil { writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: "Produk tidak ditemukan"}); return }
 	p.Profit = p.SellPrice - p.BuyPrice
@@ -110,22 +110,25 @@ func CreateProduct(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Barcode/SKU dan nama wajib diisi"}); return
 	}
 	if req.StockMin < 0 { req.StockMin = 5 }
+	if req.ItemType == "" { req.ItemType = "physical" }
+	if req.ItemType != "physical" && req.ItemType != "service" { writeJSON(w, http.StatusBadRequest, models.APIResponse{Success:false,Error:"Tipe item tidak valid"}); return }
+	if req.ItemType == "service" { req.Stock, req.StockMin = 0, 0 }
 
 	now := time.Now()
 	var catID interface{} = nil
 	if req.CategoryID > 0 { catID = req.CategoryID }
 
 	result, err := database.DB.Exec(
-		`INSERT INTO products (barcode_sku,name,category_id,buy_price,sell_price,stock,stock_min,version,created_at,created_by,updated_at,updated_by)
-		 VALUES (?,?,?,?,?,?,?,1,?,?,?,?)`,
-		req.BarcodeSKU, req.Name, catID, req.BuyPrice, req.SellPrice, req.Stock, req.StockMin,
+		`INSERT INTO products (barcode_sku,name,category_id,buy_price,sell_price,stock,stock_min,item_type,version,created_at,created_by,updated_at,updated_by)
+		 VALUES (?,?,?,?,?,?,?, ?,1,?,?,?,?)`,
+		req.BarcodeSKU, req.Name, catID, req.BuyPrice, req.SellPrice, req.Stock, req.StockMin, req.ItemType,
 		now, claims.UserID, now, claims.UserID,
 	)
 	if err != nil { writeJSON(w, http.StatusConflict, models.APIResponse{Success: false, Error: "Barcode/SKU sudah digunakan"}); return }
 	id, _ := result.LastInsertId()
 	writeJSON(w, http.StatusCreated, models.APIResponse{Success: true, Message: "Produk berhasil ditambahkan",
 		Data: models.Product{ID: id, BarcodeSKU: req.BarcodeSKU, Name: req.Name,
-			BuyPrice: req.BuyPrice, SellPrice: req.SellPrice, Stock: req.Stock, StockMin: req.StockMin}})
+			BuyPrice: req.BuyPrice, SellPrice: req.SellPrice, Stock: req.Stock, StockMin: req.StockMin, ItemType:req.ItemType}})
 }
 
 func UpdateProduct(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +142,9 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Barcode/SKU dan nama wajib diisi"}); return
 	}
 	if req.StockMin < 0 { req.StockMin = 5 }
+	if req.ItemType == "" { req.ItemType = "physical" }
+	if req.ItemType != "physical" && req.ItemType != "service" { writeJSON(w, http.StatusBadRequest, models.APIResponse{Success:false,Error:"Tipe item tidak valid"}); return }
+	if req.ItemType == "service" { req.Stock, req.StockMin = 0, 0 }
 
 	// Track price changes
 	var oldBuy, oldSell float64
@@ -154,9 +160,9 @@ func UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	if req.CategoryID > 0 { catID = req.CategoryID }
 
 	_, err := database.DB.Exec(
-		`UPDATE products SET barcode_sku=?,name=?,category_id=?,buy_price=?,sell_price=?,stock=?,stock_min=?,
+		`UPDATE products SET barcode_sku=?,name=?,category_id=?,buy_price=?,sell_price=?,stock=?,stock_min=?,item_type=?,
 		 updated_at=?,updated_by=?,version=version+1 WHERE id=? AND is_deleted=0`,
-		req.BarcodeSKU, req.Name, catID, req.BuyPrice, req.SellPrice, req.Stock, req.StockMin,
+		req.BarcodeSKU, req.Name, catID, req.BuyPrice, req.SellPrice, req.Stock, req.StockMin, req.ItemType,
 		time.Now(), claims.UserID, id,
 	)
 	if err != nil { writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal update produk"}); return }

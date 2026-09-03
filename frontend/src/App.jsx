@@ -19,6 +19,7 @@ import Suppliers      from './pages/Suppliers';
 import ShiftReport    from './pages/ShiftReport';
 import ImportProducts from './pages/ImportProducts';
 import Operations     from './pages/Operations';
+import ServiceOrders  from './pages/ServiceOrders';
 import Layout         from './components/Layout';
 
 function Guard({ children, adminOnly = false, superAdminOnly = false }) {
@@ -61,6 +62,7 @@ function AppRoutes() {
         <Route path="reports"         element={<Guard adminOnly><Reports /></Guard>} />
         <Route path="reports/shift"   element={<Guard><ShiftReport /></Guard>} />
         <Route path="customers"       element={<Guard adminOnly><Customers /></Guard>} />
+		<Route path="service-orders"  element={<Guard><ServiceOrders /></Guard>} />
         <Route path="suppliers"       element={<Guard adminOnly><Suppliers /></Guard>} />
         <Route path="discounts"       element={<Guard adminOnly><Discounts /></Guard>} />
         <Route path="settings"        element={<Guard adminOnly><Settings /></Guard>} />
