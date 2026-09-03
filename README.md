@@ -92,6 +92,9 @@ BACKUP_RETENTION_DAYS=14
 
 # Hanya untuk frontend development server terpisah
 CORS_ALLOWED_ORIGIN=http://localhost:5173
+
+# Hanya branch/edisi trial-v2: public key Ed25519 milik penerbit lisensi
+LICENSE_PUBLIC_KEY=base64-public-key-ed25519
 ```
 
 `JWT_SECRET`, `AUDIT_HMAC_KEY`, dan `INITIAL_ADMIN_PASSWORD` wajib untuk instalasi production baru. Aplikasi menolak startup production bila secret JWT atau audit tidak memenuhi ketentuan.
@@ -109,6 +112,16 @@ CORS_ALLOWED_ORIGIN=http://localhost:5173
 - Restore memeriksa `PRAGMA integrity_check` dan `foreign_key_check` sebelum database pengganti dipakai.
 
 Enkripsi backup melindungi berkas saat dipindahkan/disimpan. Untuk melindungi database aktif, gunakan akun Windows/macOS/Linux khusus aplikasi, permission direktori yang ketat, dan enkripsi disk seperti BitLocker/FileVault.
+
+## Edisi Trial (`trial-v2`)
+
+Branch `trial-v2` dibuat dari baseline `main` dan sengaja tidak memakai mekanisme trial lama. Instalasi baru mendapat trial 7 hari dan maksimal 20 produk. Selama masih trial, import produk, export CSV, backup/restore, dan laporan shift dikunci oleh middleware backend; menyembunyikan tombol di UI bukan kontrol keamanan.
+
+Upgrade dilakukan oleh super admin melalui `POST /api/license/activate` dengan token lisensi bertanda tangan Ed25519. Aplikasi hanya memegang `LICENSE_PUBLIC_KEY`; private key untuk menerbitkan token tidak boleh masuk repository ataupun perangkat pelanggan. Payload lisensi terikat ke `trial_installation_id`, sehingga token dari satu instalasi tidak dapat dipakai pada instalasi lain.
+
+Format token: `poslic-v1.<payload-base64url>.<signature-base64url>`. Payload memuat `license_id`, `product: "kasir-umkm"`, `installation_id`, `issued_at`, dan opsional `expires_at` (RFC3339). Status dapat dibaca melalui `GET /api/license/status` setelah login.
+
+Lisensi offline dapat mencegah key palsu dan pemakaian lintas instalasi, tetapi bukan DRM absolut: orang yang dapat mengganti binary, memanipulasi jam sistem, atau mengedit database dengan akses OS administrator harus tetap dicegah menggunakan permission OS, enkripsi disk, dan prosedur operasional.
 
 ## Operasional Harian
 

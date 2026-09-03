@@ -43,6 +43,9 @@ func main() {
 	if err := database.Init("database.sqlite"); err != nil {
 		log.Fatalf("❌ Gagal inisialisasi database: %v", err)
 	}
+	if err := services.InitializeTrial(); err != nil {
+		log.Fatalf("❌ Gagal inisialisasi trial: %v", err)
+	}
 	services.StartBackupScheduler("database.sqlite")
 
 	r := mux.NewRouter()
@@ -60,10 +63,13 @@ func main() {
 	// ── Protected ──────────────────────────────────────────────────────────────
 	prot := api.NewRoute().Subrouter()
 	prot.Use(middleware.AuthMiddleware)
+	prot.Use(middleware.TrialMiddleware)
 	prot.Use(middleware.AuditMiddleware)
 
 	prot.HandleFunc("/me", handlers.GetMe).Methods("GET")
 	prot.HandleFunc("/change-password", handlers.ChangePassword).Methods("POST") // Kritis #1
+	prot.Handle("/license/status", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetLicenseStatus))).Methods("GET")
+	prot.Handle("/license/activate", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.ActivateLicense))).Methods("POST")
 
 	// Categories (Kritis #3)
 	prot.Handle("/categories", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetCategories))).Methods("GET")
