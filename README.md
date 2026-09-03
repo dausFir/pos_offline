@@ -156,7 +156,9 @@ Master **Produk** sekarang mendukung dua tipe item: `Barang fisik` dan `Jasa / l
 
 Alur operasional: buat master jasa → terima order di menu **Order Servis** → masukkan progres teknisi dan sparepart → finalkan saat pembayaran. Sparepart hanya menjadi estimasi pada order; stok dan invoice baru diproses sekali saat tombol **Finalkan & Buat Invoice** dijalankan. Perhitungan PPN, diskon, dan metode pembayaran tetap memakai aturan checkout yang sama dengan penjualan barang.
 
-Setiap order memiliki token tracking acak. Untuk mengaktifkan halaman pelacakan publik di repo `pos-service-tracking`, set konfigurasi berikut pada aplikasi POS dan environment Vercel dengan secret yang sama:
+Setiap order memiliki token tracking acak. Owner/super admin dapat mengatur endpoint sinkronisasi dari **Pengaturan → Tracking Servis Publik**, sehingga dapat berpindah dari Vercel ke server sendiri tanpa rebuild aplikasi. URL harus mengarah ke `/api/sync`. Jika dikosongkan, aplikasi memakai `TRACKING_SYNC_URL` dari environment.
+
+Secret HMAC tetap bukan pengaturan UI dan harus diset pada environment POS dan server tracker dengan nilai yang sama:
 
 ```dotenv
 TRACKING_SYNC_URL=https://your-tracker.vercel.app/api/sync

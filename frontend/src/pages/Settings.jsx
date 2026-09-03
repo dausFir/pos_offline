@@ -9,6 +9,8 @@ export default function Settings() {
   const { isSuperAdmin } = useAuth();
   const { t } = useI18n();
   const [settings, setSettings] = useState({ store_name: '', store_address: '', logo_image_b64: '', qris_image_b64: '', qris_notes: '', ppn_percent: 0, receipt_footer: '' });
+	const [trackingURL, setTrackingURL] = useState('');
+	const [trackingSaving, setTrackingSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -21,6 +23,10 @@ export default function Settings() {
     try {
       const res = await api.get('/settings');
       setSettings(res.data.data || {});
+		if (isSuperAdmin()) {
+		  const tracking = await api.get('/tracking/settings');
+		  setTrackingURL(tracking.data.data?.url || '');
+		}
     } catch { toast.error('Gagal memuat pengaturan'); }
     finally { setLoading(false); }
   };
@@ -35,6 +41,13 @@ export default function Settings() {
     } catch { toast.error('Gagal menyimpan pengaturan'); }
     finally { setSaving(false); }
   };
+
+	const handleSaveTracking = async () => {
+	  setTrackingSaving(true);
+	  try { await api.put('/tracking/settings', { url: trackingURL.trim() }); toast.success('URL tracking disimpan'); }
+	  catch (err) { toast.error(err.response?.data?.error || 'Gagal menyimpan URL tracking'); }
+	  finally { setTrackingSaving(false); }
+	};
 
   const handleQRISUpload = (e) => {
     const file = e.target.files?.[0];
@@ -604,6 +617,15 @@ export default function Settings() {
           </div>
         )}
       </section>
+
+	  {isSuperAdmin() && <section className="card" style={{ marginBottom: 20 }}>
+		<div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, paddingBottom: 14, borderBottom: '1px solid var(--outline-variant)' }}>
+		  <Icon name="public" size={18} color="var(--primary)" /><h2 style={{ fontSize: 15, fontWeight: 700 }}>Tracking Servis Publik</h2>
+		</div>
+		<p style={{ fontSize: 13, color: 'var(--outline)', lineHeight: 1.6, marginBottom: 14 }}>Endpoint dapat diarahkan ke Vercel atau server sendiri. Kosongkan untuk memakai <code>TRACKING_SYNC_URL</code> dari environment.</p>
+		<div className="input-group"><label className="input-label">URL endpoint sinkronisasi</label><input className="input mono" placeholder="https://tracking.tokosaya.id/api/sync" value={trackingURL} onChange={e => setTrackingURL(e.target.value)} /><span style={{ fontSize: 11, color: 'var(--outline)', marginTop: 4 }}>Harus berakhir dengan <code>/api/sync</code>. Secret HMAC tetap disimpan sebagai <code>TRACKING_SYNC_SECRET</code> di environment server POS.</span></div>
+		<button className="btn btn-primary" style={{ marginTop: 14 }} onClick={handleSaveTracking} disabled={trackingSaving}>{trackingSaving ? 'Menyimpan…' : 'Simpan URL Tracking'}</button>
+	  </section>}
 
       {/* Save button */}
       <div style={{ marginBottom: 24 }}>

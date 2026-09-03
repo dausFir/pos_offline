@@ -21,7 +21,11 @@ var trackingMu sync.Mutex
 func TriggerTrackingSync() { go SyncTrackingOutbox() }
 
 func SyncTrackingOutbox() {
-	url, secret := os.Getenv("TRACKING_SYNC_URL"), os.Getenv("TRACKING_SYNC_SECRET")
+	// Owner-configured URL wins, allowing a migration from Vercel to a private
+	// server without rebuilding the POS. The signing secret intentionally stays
+	// in the process environment and is never persisted in SQLite.
+	url := database.GetSetting("tracking_sync_url", os.Getenv("TRACKING_SYNC_URL"))
+	secret := os.Getenv("TRACKING_SYNC_SECRET")
 	if url == "" || len(secret) < 24 { return }
 	if !trackingMu.TryLock() { return }; defer trackingMu.Unlock()
 	rows, err := database.DB.Query("SELECT id,payload FROM tracking_outbox WHERE status IN ('pending','failed') ORDER BY id LIMIT 20")
