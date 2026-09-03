@@ -1,3 +1,5 @@
+LICENSE_PUBLIC_KEY ?=
+
 .PHONY: all build-frontend build-go dev clean
 
 all: build
@@ -12,8 +14,9 @@ build-frontend:
 
 build-go:
 	@echo "🔨 Compiling Go binary..."
+	@test -n "$(LICENSE_PUBLIC_KEY)" || (echo "LICENSE_PUBLIC_KEY wajib diisi untuk build rilis"; exit 1)
 	go mod tidy
-	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o kasir-umkm.exe .
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X kasir-umkm/internal/services.LicensePublicKeyBase64=$(LICENSE_PUBLIC_KEY)" -o kasir-umkm.exe .
 
 build-linux:
 	@echo "🔨 Compiling for Linux..."

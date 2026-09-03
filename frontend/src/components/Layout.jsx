@@ -5,6 +5,7 @@ import { useI18n } from '../context/I18nContext';
 import ServerStatus from './ServerStatus';
 import GlobalSearch from './GlobalSearch';
 import Icon from './Icon';
+import LicenseBanner from './LicenseBanner';
 import toast from 'react-hot-toast';
 
 const NAV_SECTIONS = [
@@ -219,7 +220,7 @@ export default function Layout() {
         </div>
       )}
 
-      <main className="main-content"><Outlet /></main>
+      <main className="main-content"><LicenseBanner /><Outlet /></main>
 
       <style>{`
         .app-shell { display: flex; min-height: 100dvh; background: var(--surface); }

@@ -19,6 +19,12 @@ if %errorlevel% neq 0 (
     pause & exit /b 1
 )
 
+if "%LICENSE_PUBLIC_KEY%"=="" (
+    echo [ERROR] LICENSE_PUBLIC_KEY belum diisi.
+    echo Set public key Ed25519 base64 sebelum build rilis.
+    pause & exit /b 1
+)
+
 echo Memeriksa GCC (dibutuhkan untuk SQLite)...
 where gcc >nul 2>&1
 if %errorlevel% neq 0 (
@@ -49,7 +55,7 @@ echo [4/4] Compile ke kasir-umkm.exe ...
 set CGO_ENABLED=1
 set GOOS=windows
 set GOARCH=amd64
-go build -ldflags="-s -w" -o kasir-umkm.exe .
+go build -ldflags="-s -w -X kasir-umkm/internal/services.LicensePublicKeyBase64=%LICENSE_PUBLIC_KEY%" -o kasir-umkm.exe .
 if %errorlevel% neq 0 (
     echo [ERROR] Build Go gagal
     pause & exit /b 1

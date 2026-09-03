@@ -110,6 +110,20 @@ CORS_ALLOWED_ORIGIN=http://localhost:5173
 
 Enkripsi backup melindungi berkas saat dipindahkan/disimpan. Untuk melindungi database aktif, gunakan akun Windows/macOS/Linux khusus aplikasi, permission direktori yang ketat, dan enkripsi disk seperti BitLocker/FileVault.
 
+## Aktivasi Lisensi Perangkat
+
+Versi penuh (`main`) memakai lisensi offline per perangkat agar binary dan database tidak dapat disalin begitu saja ke PC lain. Pada instalasi pertama aplikasi membuat `installation_id` dan menghitung hash identitas perangkat; identitas mentah seperti MachineGuid tidak disimpan atau dikirim.
+
+Super admin membuka aplikasi lalu menekan **Salin Kode Aktivasi**. Kirim kode tersebut ke penerbit lisensi. Penerbit mengeluarkan token `poslic-v1.<payload>.<signature>` yang ditandatangani Ed25519; token tersebut diaktifkan melalui tombol **Aktivasi Lisensi**. Token hanya valid jika signature, produk, `installation_id`, dan hash perangkat semuanya cocok.
+
+Public key penerbit harus di-embed saat build, bukan disimpan dalam `.env` pelanggan:
+
+```bash
+go build -ldflags "-s -w -X kasir-umkm/internal/services.LicensePublicKeyBase64=BASE64_ED25519_PUBLIC_KEY" -o kasir-umkm .
+```
+
+Private key untuk menerbitkan token tidak boleh masuk repository, binary, maupun perangkat user. Jika PC diganti atau OS diinstal ulang, penerbit menerbitkan token baru berdasarkan kode aktivasi perangkat baru. Backup data tetap dapat dipulihkan; lisensi perangkat baru diaktifkan setelahnya.
+
 ## Operasional Harian
 
 1. Login dengan akun kasir.
