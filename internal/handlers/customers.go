@@ -174,6 +174,8 @@ func RecordDebtPayment(w http.ResponseWriter, r *http.Request) {
 	if req.Amount <= 0 {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Jumlah bayar harus > 0"}); return
 	}
+	if req.PaymentMethod == "" { req.PaymentMethod = "cash" }
+	if !validPaymentMethod(req.PaymentMethod) { writeJSON(w, http.StatusBadRequest, models.APIResponse{Success:false,Error:"Metode pembayaran tidak valid"}); return }
 
 	var current float64
 	err := database.DB.QueryRow(
@@ -189,17 +191,18 @@ func RecordDebtPayment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newBalance := current - req.Amount
-	tx, _ := database.DB.Begin()
-	tx.Exec("UPDATE customers SET debt_balance=?, updated_at=? WHERE id=?", newBalance, time.Now(), req.CustomerID)
-	tx.Exec(
+	tx, err := database.DB.Begin(); if err != nil { writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal mencatat pembayaran"}); return }; defer tx.Rollback()
+	now:=time.Now()
+	if _,err:=tx.Exec("UPDATE customers SET debt_balance=?, updated_at=? WHERE id=?", newBalance, now, req.CustomerID);err!=nil { writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal memperbarui hutang"}); return }
+	if _,err:=tx.Exec(
 		`INSERT INTO debt_ledger (customer_id, amount, type, note, balance_after, created_by, created_at)
 		 VALUES (?,?,?,?,?,?,?)`,
-		req.CustomerID, req.Amount, "payment", req.Note, newBalance, claims.UserID, time.Now(),
-	)
-	tx.Commit()
+		req.CustomerID, req.Amount, "payment", req.Note, newBalance, claims.UserID, now,
+	);err!=nil { writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal menyimpan riwayat hutang"}); return }
+	receipt,err:=postPayment(tx,0,0,req.CustomerID,"receivable_payment","in",req.PaymentMethod,req.Amount,req.Note,claims.UserID,now);if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal menyimpan pembayaran"});return};if err=tx.Commit();err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal menyimpan pembayaran"});return}
 
 	writeJSON(w, http.StatusOK, models.APIResponse{
 		Success: true, Message: "Pembayaran hutang dicatat",
-		Data: map[string]interface{}{"new_balance": newBalance},
+		Data: map[string]interface{}{"new_balance": newBalance,"receipt_number":receipt},
 	})
 }

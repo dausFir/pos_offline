@@ -58,6 +58,7 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		product                       models.Product
 		qty                           int
 		unitPrice, subtotal, buyPrice float64
+		lineDiscount, netSubtotal     float64
 		catName                       string
 		itemType                      string
 	}
@@ -134,6 +135,13 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	subtotalAfterDiscount := subtotalBeforeDiscount - discountAmount
+	lineSubtotals := make([]float64, len(details))
+	for i := range details { lineSubtotals[i] = details[i].subtotal }
+	lineDiscounts := services.AllocateDiscount(lineSubtotals, discountAmount)
+	for i := range details {
+		details[i].lineDiscount = lineDiscounts[i]
+		details[i].netSubtotal = details[i].subtotal - details[i].lineDiscount
+	}
 
 	// PPN / Tax calculation with support for inclusive/exclusive mode
 	ppnPct := 0.0
@@ -158,6 +166,16 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			totalAmount = subtotalAfterDiscount + ppnAmount
 		}
 	}
+	// Deposits are a customer advance, not a discount.  The final invoice keeps
+	// its full value while only the outstanding amount is collected now.
+	serviceDepositCredit := 0.0
+	if req.ServiceOrderID > 0 {
+		if err := tx.QueryRow(`SELECT COALESCE(SUM(CASE WHEN direction='in' AND type='service_deposit' THEN amount WHEN direction='out' AND type='refund' THEN -amount ELSE 0 END),0) FROM payment_ledger WHERE service_order_id=?`, req.ServiceOrderID).Scan(&serviceDepositCredit); err != nil {
+			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success:false,Error:"Gagal menghitung DP servis"}); return
+		}
+		if serviceDepositCredit > totalAmount { serviceDepositCredit = totalAmount }
+	}
+	paymentDue := totalAmount - serviceDepositCredit
 
 	// Kritis #6: Split payment validation + E-wallet support
 	cashAmt, qrisAmt := req.CashAmount, req.QRISAmount
@@ -173,36 +191,36 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	case "cash":
 		cashAmt = req.PaymentAmount
 		qrisAmt = 0
-		if req.PaymentAmount < totalAmount {
-			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Pembayaran kurang. Total: Rp %.0f", totalAmount)})
+		if req.PaymentAmount < paymentDue {
+			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Pembayaran kurang. Sisa tagihan: Rp %.0f", paymentDue)})
 			return
 		}
 	case "qris":
-		qrisAmt = totalAmount
+		qrisAmt = paymentDue
 		cashAmt = 0
-		req.PaymentAmount = totalAmount
+		req.PaymentAmount = paymentDue
 	case "split":
 		if cashAmt < 0 || qrisAmt < 0 {
 			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Nominal split tidak boleh negatif"})
 			return
 		}
 		total := cashAmt + qrisAmt
-		if total < totalAmount {
-			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Total split (Rp %.0f) kurang dari total transaksi (Rp %.0f)", total, totalAmount)})
+		if total != paymentDue {
+			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: fmt.Sprintf("Total split harus sama dengan sisa tagihan (Rp %.0f)", paymentDue)})
 			return
 		}
 		req.PaymentAmount = total
 	default:
 		// Handle e-wallet payments
 		if ewalletMethods[req.PaymentMethod] {
-			req.EwalletAmount = totalAmount
+			req.EwalletAmount = paymentDue
 			req.EwalletProvider = req.PaymentMethod
-			req.PaymentAmount = totalAmount
+			req.PaymentAmount = paymentDue
 			cashAmt = 0
 			qrisAmt = 0
 		}
 	}
-	changeAmount := req.PaymentAmount - totalAmount
+	changeAmount := req.PaymentAmount - paymentDue
 	// Only cash payments get change
 	if req.PaymentMethod != "cash" {
 		changeAmount = 0
@@ -247,16 +265,16 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	var txDetails []models.TransactionDetail
 	for _, d := range details {
 		_, err = tx.Exec(
-			`INSERT INTO transaction_details (transaction_id,product_id,product_name,category_name,quantity,unit_price,buy_price,subtotal,created_at)
-			 VALUES (?,?,?,?,?,?,?,?,?)`,
-			txID, d.product.ID, d.product.Name, d.catName, d.qty, d.unitPrice, d.buyPrice, d.subtotal, now,
+			`INSERT INTO transaction_details (transaction_id,product_id,product_name,category_name,quantity,unit_price,buy_price,subtotal,discount_amount,net_subtotal,created_at)
+			 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+			txID, d.product.ID, d.product.Name, d.catName, d.qty, d.unitPrice, d.buyPrice, d.subtotal, d.lineDiscount, d.netSubtotal, now,
 		)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal simpan detail"})
 			return
 		}
 		if d.itemType != "physical" {
-			txDetails = append(txDetails, models.TransactionDetail{TransactionID:txID, ProductID:d.product.ID, ProductName:d.product.Name, CategoryName:d.catName, Quantity:d.qty, UnitPrice:d.unitPrice, BuyPrice:d.buyPrice, Subtotal:d.subtotal, Profit:d.subtotal-d.buyPrice*float64(d.qty)})
+			txDetails = append(txDetails, models.TransactionDetail{TransactionID:txID, ProductID:d.product.ID, ProductName:d.product.Name, CategoryName:d.catName, Quantity:d.qty, UnitPrice:d.unitPrice, BuyPrice:d.buyPrice, Subtotal:d.subtotal, DiscountAmount:d.lineDiscount, NetSubtotal:d.netSubtotal, Profit:d.netSubtotal-d.buyPrice*float64(d.qty)})
 			continue
 		}
 
@@ -278,7 +296,7 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		txDetails = append(txDetails, models.TransactionDetail{
 			TransactionID: txID, ProductID: d.product.ID, ProductName: d.product.Name,
 			CategoryName: d.catName, Quantity: d.qty, UnitPrice: d.unitPrice,
-			BuyPrice: d.buyPrice, Subtotal: d.subtotal, Profit: d.subtotal - d.buyPrice*float64(d.qty),
+			BuyPrice: d.buyPrice, Subtotal: d.subtotal, DiscountAmount:d.lineDiscount, NetSubtotal:d.netSubtotal, Profit: d.netSubtotal - d.buyPrice*float64(d.qty),
 		})
 	}
 
@@ -288,12 +306,14 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal membaca saldo hutang pelanggan"})
 			return
 		}
-		newBalance := curBalance + totalAmount
+		debtAmount := totalAmount
+		if req.ServiceOrderID > 0 { debtAmount = paymentDue }
+		newBalance := curBalance + debtAmount
 		if _, err := tx.Exec("UPDATE customers SET debt_balance=?, updated_at=? WHERE id=?", newBalance, now, req.CustomerID); err != nil {
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal mencatat hutang pelanggan"})
 			return
 		}
-		if _, err := tx.Exec(`INSERT INTO debt_ledger (customer_id, transaction_id, invoice_number, amount, type, note, balance_after, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)`, req.CustomerID, txID, invoice, totalAmount, "debt", "Pembelian "+invoice, newBalance, claims.UserID, now); err != nil {
+		if _, err := tx.Exec(`INSERT INTO debt_ledger (customer_id, transaction_id, invoice_number, amount, type, note, balance_after, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)`, req.CustomerID, txID, invoice, debtAmount, "debt", "Pembelian "+invoice, newBalance, claims.UserID, now); err != nil {
 			writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal menyimpan riwayat hutang"})
 			return
 		}
@@ -304,6 +324,16 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		if affected,_:=result.RowsAffected();affected!=1 { writeJSON(w,409,models.APIResponse{Success:false,Error:"Order servis sudah berubah"});return }
 		tx.Exec("INSERT INTO service_progress(service_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?)",req.ServiceOrderID,"completed","Invoice "+invoice+" dibuat",claims.UserID,now)
 		queueTracking(tx, req.ServiceOrderID)
+		tx.Exec("UPDATE service_parts SET reserved_quantity=0 WHERE service_order_id=?", req.ServiceOrderID)
+	}
+	// Create immutable payment records after the invoice exists.  Cash tender and
+	// change never inflate revenue: the ledger only stores the amount applied.
+	if req.PaymentMethod != "credit" && paymentDue > 0 {
+		cashApplied := cashAmt
+		if req.PaymentMethod == "cash" { cashApplied = paymentDue }
+		if cashApplied > 0 { if _,err:=postPayment(tx,txID,req.ServiceOrderID,req.CustomerID,"invoice_payment","in","cash",cashApplied,"Pembayaran "+invoice,claims.UserID,now);err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal mencatat pembayaran"});return} }
+		if qrisAmt > 0 { if _,err:=postPayment(tx,txID,req.ServiceOrderID,req.CustomerID,"invoice_payment","in","qris",qrisAmt,"Pembayaran "+invoice,claims.UserID,now);err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal mencatat pembayaran"});return} }
+		if req.EwalletAmount > 0 { if _,err:=postPayment(tx,txID,req.ServiceOrderID,req.CustomerID,"invoice_payment","in",req.EwalletProvider,req.EwalletAmount,"Pembayaran "+invoice,claims.UserID,now);err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal mencatat pembayaran"});return} }
 	}
 
 	if err = tx.Commit(); err != nil {

@@ -654,6 +654,41 @@ func createImportantTables() error {
 		sent_at DATETIME
 	);
 	CREATE INDEX IF NOT EXISTS idx_tracking_outbox_pending ON tracking_outbox(status, created_at);
+
+	CREATE TABLE IF NOT EXISTS receipt_sequence (
+		date_key TEXT PRIMARY KEY,
+		last_seq INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE TABLE IF NOT EXISTS payment_ledger (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		receipt_number TEXT NOT NULL UNIQUE,
+		transaction_id INTEGER REFERENCES transactions(id),
+		service_order_id INTEGER REFERENCES service_orders(id),
+		customer_id INTEGER REFERENCES customers(id),
+		shift_id INTEGER REFERENCES cash_shifts(id),
+		type TEXT NOT NULL CHECK(type IN ('invoice_payment','service_deposit','receivable_payment','refund','gateway_fee')),
+		direction TEXT NOT NULL CHECK(direction IN ('in','out')),
+		payment_method TEXT NOT NULL,
+		amount REAL NOT NULL CHECK(amount > 0),
+		note TEXT NOT NULL DEFAULT '',
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		reversal_of INTEGER REFERENCES payment_ledger(id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_payment_ledger_transaction ON payment_ledger(transaction_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_payment_ledger_service ON payment_ledger(service_order_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_payment_ledger_customer ON payment_ledger(customer_id, created_at);
+	CREATE INDEX IF NOT EXISTS idx_payment_ledger_shift ON payment_ledger(shift_id, payment_method, created_at);
+	CREATE TABLE IF NOT EXISTS service_costs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		service_order_id INTEGER NOT NULL REFERENCES service_orders(id),
+		cost_type TEXT NOT NULL CHECK(cost_type IN ('labor','external','other')),
+		description TEXT NOT NULL DEFAULT '',
+		amount REAL NOT NULL CHECK(amount > 0),
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_service_costs_order ON service_costs(service_order_id, created_at);
 	`
 	_, err := DB.Exec(schema)
 	return err
@@ -670,6 +705,10 @@ func runImportantMigrations() error {
 		`CREATE INDEX IF NOT EXISTS idx_sessions_active ON sessions(is_active, expires_at)`,
 		`ALTER TABLE products ADD COLUMN item_type TEXT NOT NULL DEFAULT 'physical'`,
 		`ALTER TABLE service_orders ADD COLUMN service_product_id INTEGER REFERENCES products(id)`,
+		`ALTER TABLE transaction_details ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE transaction_details ADD COLUMN net_subtotal REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE service_parts ADD COLUMN reserved_quantity INTEGER NOT NULL DEFAULT 0`,
+		`UPDATE transaction_details SET net_subtotal=subtotal WHERE net_subtotal=0`,
 		`CREATE INDEX IF NOT EXISTS idx_products_item_type ON products(item_type) WHERE is_deleted=0`,
 	}
 	for _, s := range stmts {

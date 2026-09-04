@@ -29,9 +29,11 @@ func GetProfitReport(w http.ResponseWriter, r *http.Request) {
 	_ = dateToEnd
 
 	q := `SELECT
-		COALESCE(SUM(td.subtotal), 0)                      as revenue,
+		COALESCE(SUM(td.net_subtotal), 0)                  as revenue,
+		COALESCE(SUM(td.subtotal), 0)                      as gross_revenue,
+		COALESCE(SUM(td.discount_amount), 0)               as discount_total,
 		COALESCE(SUM(td.buy_price * td.quantity), 0)        as cogs,
-		COALESCE(SUM(td.subtotal - td.buy_price*td.quantity), 0) as profit,
+		COALESCE(SUM(td.net_subtotal - td.buy_price*td.quantity), 0) as profit,
 		COALESCE(SUM(td.quantity), 0)                       as items_sold,
 		COUNT(DISTINCT t.id)                                as tx_count
 	FROM transactions t
@@ -39,9 +41,13 @@ func GetProfitReport(w http.ResponseWriter, r *http.Request) {
 	WHERE t.status='completed' AND t.is_deleted=0
 	AND t.created_at >= ? AND t.created_at <= ?`
 
-	var rev, cogs, profit float64
+	var rev, grossRev, discountTotal, cogs, profit, ppn float64
 	var itemsSold, txCount int
-	database.DB.QueryRow(q, dateFrom, dateToEnd).Scan(&rev, &cogs, &profit, &itemsSold, &txCount)
+	database.DB.QueryRow(q, dateFrom, dateToEnd).Scan(&rev, &grossRev, &discountTotal, &cogs, &profit, &itemsSold, &txCount)
+	_ = database.DB.QueryRow(`SELECT COALESCE(SUM(ppn_amount),0) FROM transactions WHERE status='completed' AND is_deleted=0 AND created_at>=? AND created_at<=?`, dateFrom,dateToEnd).Scan(&ppn)
+	var serviceCosts float64
+	_ = database.DB.QueryRow(`SELECT COALESCE(SUM(sc.amount),0) FROM service_costs sc JOIN service_orders so ON so.id=sc.service_order_id JOIN transactions t ON t.id=so.invoice_id WHERE t.status='completed' AND t.is_deleted=0 AND t.created_at>=? AND t.created_at<=?`, dateFrom,dateToEnd).Scan(&serviceCosts)
+	profit -= serviceCosts
 
 	marginPct := 0.0
 	if rev > 0 {
@@ -55,9 +61,9 @@ func GetProfitReport(w http.ResponseWriter, r *http.Request) {
 	// Per category breakdown
 	catQ := `SELECT
 		COALESCE(td.category_name, 'Tanpa Kategori') as cat,
-		SUM(td.subtotal)                               as revenue,
+		SUM(td.net_subtotal)                           as revenue,
 		SUM(td.buy_price * td.quantity)               as cogs,
-		SUM(td.subtotal - td.buy_price * td.quantity) as profit,
+		SUM(td.net_subtotal - td.buy_price * td.quantity) as profit,
 		SUM(td.quantity)                               as items_sold
 	FROM transactions t
 	JOIN transaction_details td ON td.transaction_id = t.id
@@ -66,23 +72,23 @@ func GetProfitReport(w http.ResponseWriter, r *http.Request) {
 	GROUP BY td.category_name ORDER BY revenue DESC`
 
 	catRows, _ := database.DB.Query(catQ, dateFrom, dateToEnd)
-	defer catRows.Close()
+	if catRows != nil { defer catRows.Close() }
 	var byCategory []models.ProfitByCategory
-	for catRows.Next() {
+	if catRows != nil { for catRows.Next() {
 		var c models.ProfitByCategory
 		catRows.Scan(&c.CategoryName, &c.Revenue, &c.COGS, &c.Profit, &c.ItemsSold)
 		if c.Revenue > 0 {
 			c.MarginPct = c.Profit / c.Revenue * 100
 		}
 		byCategory = append(byCategory, c)
-	}
+	} }
 	if byCategory == nil {
 		byCategory = []models.ProfitByCategory{}
 	}
 
 	// Daily trend for the period
 	dailyQ := `SELECT DATE(t.created_at) as day,
-		COALESCE(SUM(td.subtotal),0) as rev,
+		COALESCE(SUM(td.net_subtotal),0) as rev,
 		COALESCE(SUM(td.buy_price*td.quantity),0) as cogs
 	FROM transactions t
 	JOIN transaction_details td ON td.transaction_id=t.id
@@ -97,14 +103,14 @@ func GetProfitReport(w http.ResponseWriter, r *http.Request) {
 		Profit float64 `json:"profit"`
 	}
 	dRows, _ := database.DB.Query(dailyQ, dateFrom, dateToEnd)
-	defer dRows.Close()
+	if dRows != nil { defer dRows.Close() }
 	var daily []DailyRow
-	for dRows.Next() {
+	if dRows != nil { for dRows.Next() {
 		var d DailyRow
 		dRows.Scan(&d.Day, &d.Rev, &d.COGS)
 		d.Profit = d.Rev - d.COGS
 		daily = append(daily, d)
-	}
+	} }
 	if daily == nil {
 		daily = []DailyRow{}
 	}
@@ -114,7 +120,7 @@ func GetProfitReport(w http.ResponseWriter, r *http.Request) {
 		Data: map[string]interface{}{
 			"summary": models.ProfitReport{
 				Period:       dateFrom + " s/d " + dateTo,
-				TotalRevenue: rev, TotalCOGS: cogs,
+				TotalRevenue: rev, GrossRevenue:grossRev, DiscountTotal:discountTotal, PPNOutput:ppn, ServiceCosts:serviceCosts, TotalCOGS: cogs,
 				GrossProfit: profit, MarginPct: marginPct,
 				TxCount: txCount, ItemsSold: itemsSold, AvgTicket: avgTicket,
 			},

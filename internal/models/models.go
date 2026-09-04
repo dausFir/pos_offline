@@ -90,6 +90,8 @@ type TransactionDetail struct {
 	UnitPrice     float64   `json:"unit_price"`
 	BuyPrice      float64   `json:"buy_price"` // snapshot harga beli
 	Subtotal      float64   `json:"subtotal"`
+	DiscountAmount float64  `json:"discount_amount"`
+	NetSubtotal   float64   `json:"net_subtotal"`
 	Profit        float64   `json:"profit"` // computed
 	CreatedAt     time.Time `json:"created_at"`
 }
@@ -143,6 +145,10 @@ type ProfitReport struct {
 	TxCount      int     `json:"tx_count"`
 	ItemsSold    int     `json:"items_sold"`
 	AvgTicket    float64 `json:"avg_ticket"`
+	GrossRevenue float64 `json:"gross_revenue"`
+	DiscountTotal float64 `json:"discount_total"`
+	PPNOutput    float64 `json:"ppn_output"`
+	ServiceCosts float64 `json:"service_costs"`
 }
 
 type ProfitByCategory struct {
@@ -435,6 +441,7 @@ type DebtPaymentRequest struct {
 	CustomerID int64   `json:"customer_id"`
 	Amount     float64 `json:"amount"`
 	Note       string  `json:"note"`
+	PaymentMethod string `json:"payment_method"`
 }
 
 // ── Penting #6: Supplier ──────────────────────────────────────────────────────
@@ -500,6 +507,28 @@ type CheckoutRequestV3 struct {
 	ServiceOrderID  int64          `json:"service_order_id"`
 }
 
+type PaymentLedgerEntry struct {
+	ID             int64     `json:"id"`
+	ReceiptNumber  string    `json:"receipt_number"`
+	TransactionID  int64     `json:"transaction_id,omitempty"`
+	ServiceOrderID int64     `json:"service_order_id,omitempty"`
+	CustomerID     int64     `json:"customer_id,omitempty"`
+	ShiftID        int64     `json:"shift_id,omitempty"`
+	Type           string    `json:"type"`
+	Direction      string    `json:"direction"`
+	PaymentMethod  string    `json:"payment_method"`
+	Amount         float64   `json:"amount"`
+	Note           string    `json:"note,omitempty"`
+	CreatedBy      int64     `json:"created_by"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+type PaymentRequest struct {
+	Amount        float64 `json:"amount"`
+	PaymentMethod string  `json:"payment_method"`
+	Note          string  `json:"note"`
+}
+
 // ── Service orders ──────────────────────────────────────────────────────────
 // A service order is a work document. It remains separate from a sale invoice so
 // spare-part stock is only reduced once the owner/cashier finalises payment.
@@ -522,6 +551,8 @@ type ServiceOrder struct {
 	TechnicianName  string         `json:"technician_name,omitempty"`
 	EstimatedCost   float64        `json:"estimated_cost"`
 	DepositAmount   float64        `json:"deposit_amount"`
+	DepositBalance  float64        `json:"deposit_balance"`
+	OutstandingAmount float64      `json:"outstanding_amount"`
 	DueAt           sql.NullTime   `json:"-"`
 	DueAtValue      string         `json:"due_at,omitempty"`
 	TrackingToken   string         `json:"tracking_token,omitempty"`
@@ -532,6 +563,7 @@ type ServiceOrder struct {
 	UpdatedAt       time.Time      `json:"updated_at"`
 	Progress        []ServiceProgress `json:"progress,omitempty"`
 	Parts           []ServicePart  `json:"parts,omitempty"`
+	Costs           []ServiceCost  `json:"costs,omitempty"`
 }
 
 type ServiceProgress struct {
@@ -551,6 +583,16 @@ type ServicePart struct {
 	Quantity int `json:"quantity"`
 	UnitPrice float64 `json:"unit_price"`
 	Subtotal float64 `json:"subtotal"`
+	ReservedQuantity int `json:"reserved_quantity"`
+}
+
+type ServiceCost struct {
+	ID int64 `json:"id"`
+	ServiceOrderID int64 `json:"service_order_id"`
+	CostType string `json:"cost_type"`
+	Description string `json:"description"`
+	Amount float64 `json:"amount"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type ServiceOrderRequest struct {
@@ -564,9 +606,11 @@ type ServiceOrderRequest struct {
 	TechnicianID int64 `json:"technician_id"`
 	EstimatedCost float64 `json:"estimated_cost"`
 	DepositAmount float64 `json:"deposit_amount"`
+	DepositPaymentMethod string `json:"deposit_payment_method"`
 	DueAt string `json:"due_at"`
 	Notes string `json:"notes"`
 }
 
 type ServiceStatusRequest struct { Status string `json:"status"`; Note string `json:"note"`; TechnicianID int64 `json:"technician_id"` }
 type ServicePartRequest struct { ProductID int64 `json:"product_id"`; Quantity int `json:"quantity"`; UnitPrice float64 `json:"unit_price"` }
+type ServiceCostRequest struct { CostType string `json:"cost_type"`; Description string `json:"description"`; Amount float64 `json:"amount"` }

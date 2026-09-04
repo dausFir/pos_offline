@@ -65,7 +65,7 @@ func CloseShift(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var cashSales float64
-	_ = database.DB.QueryRow("SELECT COALESCE(SUM(cash_amount),0) FROM transactions WHERE user_id=? AND status='completed' AND is_deleted=0 AND created_at>=?", claims.UserID, openedAt).Scan(&cashSales)
+	_ = database.DB.QueryRow(`SELECT COALESCE(SUM(CASE WHEN direction='in' THEN amount ELSE -amount END),0) FROM payment_ledger WHERE shift_id=? AND payment_method='cash'`, id).Scan(&cashSales)
 	expected, diff := services.ReconcileCash(opening, cashSales, req.Cash)
 	_, err := database.DB.Exec("UPDATE cash_shifts SET expected_cash=?,counted_cash=?,difference=?,close_note=?,status='closed',closed_at=?,closed_by=? WHERE id=? AND status='open'", expected, req.Cash, diff, req.Note, time.Now(), claims.UserID, id)
 	if err != nil {

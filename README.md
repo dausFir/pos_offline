@@ -154,7 +154,15 @@ Status job dan detail error tersedia setelah impor selesai.
 
 Master **Produk** sekarang mendukung dua tipe item: `Barang fisik` dan `Jasa / layanan`. Jasa tidak memiliki stok dan tidak akan membuat mutasi stok saat dijual. Hanya admin/owner yang dapat membuat master jasa.
 
-Alur operasional: buat master jasa → terima order di menu **Order Servis** → masukkan progres teknisi dan sparepart → finalkan saat pembayaran. Sparepart hanya menjadi estimasi pada order; stok dan invoice baru diproses sekali saat tombol **Finalkan & Buat Invoice** dijalankan. Perhitungan PPN, diskon, dan metode pembayaran tetap memakai aturan checkout yang sama dengan penjualan barang.
+Alur operasional: buat master jasa → terima order di menu **Order Servis** → catat DP dengan metode pembayaran → masukkan progres, biaya kerja, dan sparepart → (opsional) reservasi sparepart → finalkan saat pembayaran. DP tercatat sebagai **uang muka pelanggan**, bukan pendapatan; hanya sisa tagihan yang dibayar saat invoice final dibuat. Sparepart hanya mengurangi stok saat invoice final dibuat, sedangkan reservasi menjaga stok tetap tersedia tanpa mengurangi fisik.
+
+## Akuntansi Operasional
+
+Sistem menyimpan pembayaran pada ledger yang tidak diubah langsung: pembayaran invoice, DP servis, pelunasan piutang, refund, dan biaya gateway memiliki nomor bukti (`RCPT-YYYYMMDD-xxxxx`), metode, kasir, waktu, dan shift. Kas harapan saat tutup shift dihitung dari pembayaran tunai ledger, sehingga DP dan pelunasan piutang tidak hilang dari rekonsiliasi kas.
+
+Laporan laba-rugi memakai **pendapatan neto** (nilai detail setelah alokasi diskon), bukan subtotal kotor. PPN ditampilkan terpisah sebagai kewajiban pajak. Untuk service order, biaya tenaga kerja/vendor/biaya lain yang dicatat pada order mengurangi laba pekerjaan setelah invoice final dibuat. Piutang dari invoice servis hanya sebesar sisa setelah DP.
+
+Catatan: pembalikan pembayaran/refund harus melalui workflow refund yang berotorisasi; jangan mengubah database SQLite langsung karena akan memutus jejak audit dan rekonsiliasi.
 
 Setiap order memiliki token tracking acak. Owner/super admin dapat mengatur endpoint sinkronisasi dari **Pengaturan → Tracking Servis Publik**, sehingga dapat berpindah dari Vercel ke server sendiri tanpa rebuild aplikasi. URL harus mengarah ke `/api/sync`. Jika dikosongkan, aplikasi memakai `TRACKING_SYNC_URL` dari environment.
 
@@ -187,6 +195,9 @@ Jika `AUTO_BACKUP_PASSWORD` diset, aplikasi membuat backup otomatis di direktori
 | `GET/POST` | `/api/service-orders` | Semua role | Daftar dan buat order jasa |
 | `POST` | `/api/service-orders/{id}/status` | Semua role | Catat progres kerja |
 | `POST` | `/api/service-orders/{id}/parts` | Semua role | Tambahkan sparepart estimasi |
+| `POST` | `/api/service-orders/{id}/deposit` | Semua role | Catat DP tambahan ke ledger |
+| `POST` | `/api/service-orders/{id}/costs` | Admin+ | Catat biaya tenaga kerja/vendor |
+| `POST` | `/api/service-orders/{id}/reserve` | Admin+ | Reservasi sparepart tanpa memotong stok |
 | `POST` | `/api/import/products` | Admin+ | Membuat job impor produk batch |
 | `GET` | `/api/import/products/status` | Admin+ | Status job impor |
 | `POST` | `/api/shifts/open` | Semua role | Membuka shift kasir |

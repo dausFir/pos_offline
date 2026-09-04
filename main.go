@@ -101,6 +101,9 @@ func main() {
 	prot.Handle("/service-orders/{id}", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetServiceOrder))).Methods("GET")
 	prot.Handle("/service-orders/{id}/status", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.UpdateServiceStatus))).Methods("POST")
 	prot.Handle("/service-orders/{id}/parts", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.AddServicePart))).Methods("POST")
+	prot.Handle("/service-orders/{id}/deposit", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.RecordServiceDeposit))).Methods("POST")
+	prot.Handle("/service-orders/{id}/costs", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.AddServiceCost))).Methods("POST")
+	prot.Handle("/service-orders/{id}/reserve", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ReserveServiceParts))).Methods("POST")
 
 	// Dashboard
 	prot.Handle("/dashboard/stats", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetDashboardStats))).Methods("GET")
