@@ -689,6 +689,60 @@ func createImportantTables() error {
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_service_costs_order ON service_costs(service_order_id, created_at);
+	CREATE TABLE IF NOT EXISTS business_expenses (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		expense_date DATE NOT NULL,
+		category TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		amount REAL NOT NULL CHECK(amount>0),
+		payment_method TEXT NOT NULL DEFAULT 'cash',
+		status TEXT NOT NULL DEFAULT 'posted' CHECK(status IN ('posted','voided')),
+		void_reason TEXT NOT NULL DEFAULT '',
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		voided_by INTEGER REFERENCES users(id),
+		voided_at DATETIME
+	);
+	CREATE INDEX IF NOT EXISTS idx_business_expenses_date ON business_expenses(expense_date,status);
+	CREATE TABLE IF NOT EXISTS payment_settlements (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		settlement_date DATE NOT NULL,
+		payment_method TEXT NOT NULL,
+		gross_amount REAL NOT NULL CHECK(gross_amount>=0),
+		fee_amount REAL NOT NULL DEFAULT 0 CHECK(fee_amount>=0),
+		net_amount REAL NOT NULL CHECK(net_amount>=0),
+		bank_reference TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'matched' CHECK(status IN ('matched','difference')),
+		note TEXT NOT NULL DEFAULT '',
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE TABLE IF NOT EXISTS accounting_periods (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		period_key TEXT NOT NULL UNIQUE,
+		status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed')),
+		closed_by INTEGER REFERENCES users(id),
+		closed_at DATETIME,
+		note TEXT NOT NULL DEFAULT ''
+	);
+	CREATE TABLE IF NOT EXISTS stock_opname_sessions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','posted')),
+		created_by INTEGER NOT NULL REFERENCES users(id),
+		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		posted_by INTEGER REFERENCES users(id),
+		posted_at DATETIME
+	);
+	CREATE TABLE IF NOT EXISTS stock_opname_items (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		session_id INTEGER NOT NULL REFERENCES stock_opname_sessions(id),
+		product_id INTEGER NOT NULL REFERENCES products(id),
+		system_quantity INTEGER NOT NULL,
+		counted_quantity INTEGER NOT NULL,
+		note TEXT NOT NULL DEFAULT '',
+		UNIQUE(session_id,product_id)
+	);
 	`
 	_, err := DB.Exec(schema)
 	return err

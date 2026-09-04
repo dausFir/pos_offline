@@ -201,6 +201,13 @@ tbody tr:hover { background: var(--surface-container-low); transition: backgroun
 .page-header { margin-bottom: 28px; display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .page-title { font-family: 'Manrope', sans-serif; font-size: 26px; font-weight: 800; color: var(--on-surface); letter-spacing: -0.5px; line-height: 1; }
 .page-subtitle { font-size: 13px; color: var(--on-surface-variant); margin-top: 4px; }
+.page-content { padding: 24px; max-width: 1440px; margin: 0 auto; }
+.control-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: start; }
+.form-stack { display: flex; flex-direction: column; gap: 11px; }
+.form-stack h2 { font: 800 17px 'Manrope',sans-serif; }
+.form-stack label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--on-surface-variant); }
+@media (max-width: 900px) { .control-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .page-content { padding: 16px 12px 84px; } .page-header { margin-bottom: 18px; align-items: stretch; } .page-title { font-size: 23px; } .page-header .btn { width: 100%; } .control-grid { grid-template-columns: 1fr; gap: 12px; } .card { padding: 16px; border-radius: 10px; } .modal-footer { flex-direction: column-reverse; } .modal-footer .btn { width: 100%; } th,td { padding: 10px 12px; } }
 
 /* ── Dark mode overrides ──────────────────────────────────────────────────── */
 [data-theme="dark"] {

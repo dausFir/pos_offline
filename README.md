@@ -164,6 +164,14 @@ Laporan laba-rugi memakai **pendapatan neto** (nilai detail setelah alokasi disk
 
 Catatan: pembalikan pembayaran/refund harus melalui workflow refund yang berotorisasi; jangan mengubah database SQLite langsung karena akan memutus jejak audit dan rekonsiliasi.
 
+## Kontrol Owner & Closing
+
+Menu **Kontrol Akuntansi** menyediakan pencatatan pengeluaran operasional, settlement QRIS/e-wallet (bruto, fee MDR, netto bank, dan status selisih), serta closing periode bulanan. Closing hanya dapat dilakukan super admin dan memblokir checkout maupun pengeluaran baru pada periode tersebut.
+
+Owner juga dapat memakai API stock opname untuk membuat sesi hitung stok lalu memposting selisih sebagai mutasi stok yang terlacak. Refund dilakukan dari bukti pembayaran ledger dan hanya oleh super admin; aplikasi membuat baris pembalikan baru, bukan menghapus bukti asli.
+
+Antarmuka menggunakan grid responsif dan modal bottom-sheet pada layar kecil. POS dapat dibuka melalui browser ponsel di jaringan lokal dan di-install sebagai PWA; tetap gunakan perangkat owner/admin dengan lock screen dan jaringan Wi-Fi tepercaya.
+
 Setiap order memiliki token tracking acak. Owner/super admin dapat mengatur endpoint sinkronisasi dari **Pengaturan → Tracking Servis Publik**, sehingga dapat berpindah dari Vercel ke server sendiri tanpa rebuild aplikasi. URL harus mengarah ke `/api/sync`. Jika dikosongkan, aplikasi memakai `TRACKING_SYNC_URL` dari environment.
 
 Secret HMAC tetap bukan pengaturan UI dan harus diset pada environment POS dan server tracker dengan nilai yang sama:
@@ -198,6 +206,12 @@ Jika `AUTO_BACKUP_PASSWORD` diset, aplikasi membuat backup otomatis di direktori
 | `POST` | `/api/service-orders/{id}/deposit` | Semua role | Catat DP tambahan ke ledger |
 | `POST` | `/api/service-orders/{id}/costs` | Admin+ | Catat biaya tenaga kerja/vendor |
 | `POST` | `/api/service-orders/{id}/reserve` | Admin+ | Reservasi sparepart tanpa memotong stok |
+| `GET/POST` | `/api/expenses` | Admin+ | Pengeluaran operasional dan arus kas |
+| `POST` | `/api/settlements` | Admin+ | Rekonsiliasi QRIS/e-wallet/bank |
+| `POST` | `/api/payments/refund` | Super admin | Pembalikan pembayaran berbasis ledger |
+| `POST` | `/api/accounting/periods/close` | Super admin | Mengunci periode akuntansi |
+| `POST` | `/api/stock-opnames` | Admin+ | Membuat sesi stock opname |
+| `POST` | `/api/stock-opnames/{id}/post` | Super admin | Posting selisih opname ke stok |
 | `POST` | `/api/import/products` | Admin+ | Membuat job impor produk batch |
 | `GET` | `/api/import/products/status` | Admin+ | Status job impor |
 | `POST` | `/api/shifts/open` | Semua role | Membuka shift kasir |

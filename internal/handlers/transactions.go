@@ -53,6 +53,10 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback() // Always rollback, akan diabaikan jika sudah commit
+	if !isPeriodOpen(tx, time.Now()) {
+		writeJSON(w, http.StatusConflict, models.APIResponse{Success:false, Error:"Periode akuntansi bulan ini sudah ditutup"})
+		return
+	}
 
 	type itemDetail struct {
 		product                       models.Product

@@ -38,6 +38,7 @@ const NAV_SECTIONS = [
     tk: 'nav.reports_sec',
     items: [
       { to: '/reports',         icon: 'analytics',       tk: 'nav.reports',     adminOnly: true },
+	  { to: '/accounting',      icon: 'account_balance', tk: 'Kontrol Akuntansi',adminOnly: true },
       { to: '/reports/shift',   icon: 'people',          tk: 'nav.shift_report' },
     ]
   },

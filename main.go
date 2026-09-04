@@ -93,6 +93,7 @@ func main() {
 	prot.Handle("/transactions", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetTransactions))).Methods("GET")
 	prot.Handle("/transactions/{id}", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetTransaction))).Methods("GET")
 	prot.Handle("/transactions/{id}/cancel", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.CancelTransaction))).Methods("POST")
+	prot.Handle("/payments/refund", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.ReversePayment))).Methods("POST")
 
 	// Service orders: work progress stays offline-first; public tracking is sent
 	// through the local outbox only when TRACKING_SYNC_URL/SECRET are configured.
@@ -110,6 +111,10 @@ func main() {
 
 	// Kritis #2: Laporan Laba Rugi
 	prot.Handle("/reports/profit", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetProfitReport))).Methods("GET")
+	prot.Handle("/expenses", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetExpenses))).Methods("GET")
+	prot.Handle("/expenses", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.CreateExpense))).Methods("POST")
+	prot.Handle("/settlements", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.RecordSettlement))).Methods("POST")
+	prot.Handle("/accounting/periods/close", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.CloseAccountingPeriod))).Methods("POST")
 
 	// Users
 	prot.Handle("/users", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.GetUsers))).Methods("GET")
@@ -123,6 +128,8 @@ func main() {
 	// Stock Mutations
 	prot.Handle("/stock-mutations", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetStockMutations))).Methods("GET")
 	prot.Handle("/stock-mutations", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.CreateStockMutation))).Methods("POST")
+	prot.Handle("/stock-opnames", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.CreateStockOpname))).Methods("POST")
+	prot.Handle("/stock-opnames/{id}/post", middleware.RequireRole("super_admin")(http.HandlerFunc(handlers.PostStockOpname))).Methods("POST")
 
 	// Discounts
 	prot.Handle("/discounts", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetDiscounts))).Methods("GET")
