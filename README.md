@@ -133,6 +133,12 @@ Private key untuk menerbitkan token tidak boleh masuk repository, binary, maupun
 5. Di akhir kerja, kasir menutup shift dan memasukkan kas fisik. Sistem menghitung kas harapan dan selisih.
 6. Super admin meninjau Audit & Diagnostik serta membuat backup terenkripsi secara berkala.
 
+## Akses dari HP dan Port Otomatis
+
+Aplikasi mencoba `SERVER_PORT` (default `8080`). Jika sudah dipakai aplikasi lain, POS otomatis mencoba sepuluh port berikutnya, lalu meminta port kosong dari Windows bila tetap bentrok. Port aktif dan alamat Wi-Fi lokal ditampilkan di **Dashboard → Akses dari HP / tablet**; salin alamat tersebut pada perangkat yang terhubung ke Wi-Fi yang sama.
+
+Default `SERVER_HOST=0.0.0.0` mengizinkan jaringan lokal. Untuk membatasi POS hanya ke komputer server, ubah menjadi `127.0.0.1`. Jangan melakukan port-forward router atau membuka alamat ini ke internet.
+
 ## Import Produk Batch
 
 Endpoint impor menerima CSV dengan header minimal `barcode_sku,name`. Kolom yang didukung:

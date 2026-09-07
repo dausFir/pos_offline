@@ -8,6 +8,7 @@ export default function Dashboard() {
   const [stats, setStats]       = useState(null);
   const [lowStock, setLowStock] = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [serverInfo, setServerInfo] = useState(null);
 
   const handleExportData = async () => {
     try {
@@ -37,6 +38,8 @@ export default function Dashboard() {
         // Fetch stats (includes low_stock_products count)
         const sRes = await api.get('/dashboard/stats');
         setStats(sRes.data.data);
+		const infoRes = await api.get('/server-info');
+		setServerInfo(infoRes.data.data);
       } catch (err) {
         // Dashboard stats error - silent fail
       }
@@ -85,6 +88,8 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
+
+      {serverInfo?.lan_url && <div className="card lan-access-card"><div><div className="lan-access-title"><Icon name="wifi" size={18}/>Akses dari HP / tablet</div><p>Hubungkan ke Wi-Fi yang sama, lalu buka alamat ini di browser perangkat lain.</p><code>{serverInfo.lan_url}</code></div><button className="btn btn-primary" onClick={()=>navigator.clipboard?.writeText(serverInfo.lan_url)}>Salin alamat</button></div>}
 
       {/* Stat Cards — bento grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 16, marginBottom: 28 }}>

@@ -7,8 +7,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"time"
 
 	"kasir-umkm/internal/database"
@@ -108,6 +110,7 @@ func main() {
 
 	// Dashboard
 	prot.Handle("/dashboard/stats", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetDashboardStats))).Methods("GET")
+	prot.Handle("/server-info", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetServerInfo))).Methods("GET")
 
 	// Kritis #2: Laporan Laba Rugi
 	prot.Handle("/reports/profit", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetProfitReport))).Methods("GET")
@@ -237,8 +240,11 @@ func main() {
 		fileServer.ServeHTTP(w, req)
 	})
 
-	localIP := getLocalIP()
-	port := "8080"
+	host:=os.Getenv("SERVER_HOST");if host=="" { host="0.0.0.0" }
+	port:=os.Getenv("SERVER_PORT");if port=="" { port=os.Getenv("PORT") };if port=="" { port="8080" }
+	listener, port, err:=listenWithFallback(host,port);if err!=nil{log.Fatalf("❌ Tidak dapat menemukan port kosong: %v",err)}
+	localIP := getLocalIP();lanURL:="";if localIP!="" { lanURL="http://"+localIP+":"+port }
+	services.SetServerInfo(host,port,lanURL)
 
 	fmt.Println()
 	fmt.Println("✅ Server berhasil dijalankan! (v3.1)")
@@ -254,10 +260,16 @@ func main() {
 	go func() { time.Sleep(1 * time.Second); openBrowser("http://localhost:" + port) }()
 
 	srv := &http.Server{
-		Addr: "0.0.0.0:" + port, Handler: r,
+		Handler: r,
 		ReadTimeout: 60 * time.Second, WriteTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second,
 	}
-	log.Fatal(srv.ListenAndServe())
+	log.Fatal(srv.Serve(listener))
+}
+
+func listenWithFallback(host, preferred string) (net.Listener,string,error) {
+	p,err:=strconv.Atoi(preferred);if err!=nil||p<1||p>65535 { p=8080 }
+	for i:=0;i<=10;i++ { candidate:=strconv.Itoa(p+i);listener,e:=net.Listen("tcp",net.JoinHostPort(host,candidate));if e==nil{return listener,candidate,nil} }
+	listener,err:=net.Listen("tcp",net.JoinHostPort(host,"0"));if err!=nil{return nil,"",err};return listener,strconv.Itoa(listener.Addr().(*net.TCPAddr).Port),nil
 }
 
 func getLocalIP() string {
@@ -282,7 +294,7 @@ func getLocalIP() string {
 			if ip == nil {
 				continue
 			}
-			if ip[0] == 192 && ip[1] == 168 {
+			if ip.IsPrivate() {
 				return ip.String()
 			}
 		}
