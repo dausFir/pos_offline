@@ -1,12 +1,12 @@
 {
-  "name": "Kasir UMKM",
-  "short_name": "Kasir",
-  "description": "Sistem kasir offline-first untuk UMKM",
+  "name": "RapiPos",
+  "short_name": "RapiPos",
+  "description": "RapiPos — kasir, stok, dan usaha lebih rapi.",
   "start_url": "/pos",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#00458f",
-  "theme_color": "#00458f",
+  "background_color": "#f8f7f3",
+  "theme_color": "#08766a",
   "lang": "id",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
