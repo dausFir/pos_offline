@@ -118,7 +118,7 @@ func createTables() error {
 		id          INTEGER  PRIMARY KEY AUTOINCREMENT,
 		name        TEXT     NOT NULL UNIQUE,
 		description TEXT     NOT NULL DEFAULT '',
-		color       TEXT     NOT NULL DEFAULT '#005cbb',
+		color       TEXT     NOT NULL DEFAULT '#08766a',
 		is_deleted  INTEGER  NOT NULL DEFAULT 0,
 		version     INTEGER  NOT NULL DEFAULT 1,
 		created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

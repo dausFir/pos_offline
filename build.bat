@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo   BUILD KASIR UMKM v2.0 - Windows
+echo   BUILD RAPIPOS v3.1 - Windows
 echo   Fase 5: Stok, Diskon, QRIS, Export
 echo ========================================
 echo.
@@ -51,11 +51,11 @@ go mod tidy
 if %errorlevel% neq 0 (echo [ERROR] go mod tidy gagal & pause & exit /b 1)
 
 echo.
-echo [4/4] Compile ke kasir-umkm.exe ...
+echo [4/4] Compile ke RapiPos.exe ...
 set CGO_ENABLED=1
 set GOOS=windows
 set GOARCH=amd64
-go build -ldflags="-s -w -X kasir-umkm/internal/services.LicensePublicKeyBase64=%LICENSE_PUBLIC_KEY%" -o kasir-umkm.exe .
+go build -ldflags="-s -w -X kasir-umkm/internal/services.LicensePublicKeyBase64=%LICENSE_PUBLIC_KEY%" -o RapiPos.exe .
 if %errorlevel% neq 0 (
     echo [ERROR] Build Go gagal
     pause & exit /b 1
@@ -66,10 +66,10 @@ echo ========================================
 echo   BUILD BERHASIL!
 echo ========================================
 echo.
-echo File output: kasir-umkm.exe
+echo File output: RapiPos.exe
 echo.
 echo CARA PAKAI:
-echo   1. Klik 2x kasir-umkm.exe
+echo   1. Klik 2x RapiPos.exe
 echo   2. Browser terbuka otomatis
 echo   3. Login: admin / password dari INITIAL_ADMIN_PASSWORD
 echo   4. Buka dari HP: lihat IP di terminal

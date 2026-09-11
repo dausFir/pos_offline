@@ -395,11 +395,11 @@ export default function Products() {
 /* ── Category Manager ─────────────────────────────────────────────────────── */
 function CategoryManager({ categories, onClose }) {
   const [list, setList]     = useState(categories);
-  const [form, setForm]     = useState({ name: '', description: '', color: '#005cbb' });
+  const [form, setForm]     = useState({ name: '', description: '', color: '#08766a' });
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const COLORS = ['#005cbb','#006a6a','#7a3000','#1a7a3c','#ba1a1a','#92600a','#5c3bc0','#c2185b'];
+  const COLORS = ['#08766a','#3f755d','#b64918','#1a7a3c','#ba1a1a','#92600a','#5c3bc0','#c2185b'];
 
   const refresh = async () => {
     const res = await api.get('/categories');
@@ -424,7 +424,7 @@ function CategoryManager({ categories, onClose }) {
         await api.post('/categories', form);
         toast.success('Kategori ditambahkan');
       }
-      setForm({ name: '', description: '', color: '#005cbb' });
+      setForm({ name: '', description: '', color: '#08766a' });
       setEditing(null);
       refresh();
     } catch (err) { toast.error(err.response?.data?.error || 'Gagal simpan kategori'); }
@@ -476,7 +476,7 @@ function CategoryManager({ categories, onClose }) {
                 {saving ? <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : editing ? 'Update' : 'Tambah'}
               </button>
               {editing && (
-                <button className="btn btn-ghost" onClick={() => { setEditing(null); setForm({ name: '', description: '', color: '#005cbb' }); }}>
+                        <button className="btn btn-ghost" onClick={() => { setEditing(null); setForm({ name: '', description: '', color: '#08766a' }); }}>
                   Batal Edit
                 </button>
               )}

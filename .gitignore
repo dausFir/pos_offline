@@ -5,6 +5,8 @@
 # Go binary executables 
 kasir-umkm
 kasir-umkm.exe
+RapiPos
+RapiPos.exe
 *.exe
 *.exe~
 *.dll

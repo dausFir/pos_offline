@@ -15,20 +15,33 @@ export default function ShiftReport() {
   const [loading,  setLoading]  = useState(false);
 	const [activeShift, setActiveShift] = useState(null);
 	const [shiftLoading, setShiftLoading] = useState(false);
+	const [shiftDialog, setShiftDialog] = useState(null);
+	const [cashValue, setCashValue] = useState('0');
+	const [shiftNote, setShiftNote] = useState('');
 
 	const loadMyShift = async () => {
 		try { const res = await api.get('/shifts/me'); setActiveShift(res.data.data || null); } catch { /* keep page usable */ }
 	};
-	const openShift = async () => {
-		const raw = window.prompt('Kas awal shift (Rp):', '0'); if (raw === null) return;
-		const cash = Number(raw); if (!Number.isFinite(cash) || cash < 0) return toast.error('Kas awal tidak valid');
-		setShiftLoading(true); try { await api.post('/shifts/open', { cash, note: '' }); toast.success('Shift dibuka'); loadMyShift(); } catch (e) { toast.error(e.response?.data?.error || 'Gagal membuka shift'); } finally { setShiftLoading(false); }
-	};
-	const closeShift = async () => {
-		const raw = window.prompt('Kas fisik saat tutup shift (Rp):'); if (raw === null) return;
-		const cash = Number(raw); if (!Number.isFinite(cash) || cash < 0) return toast.error('Kas fisik tidak valid');
-		const note = window.prompt('Catatan selisih (opsional):', '') || '';
-		setShiftLoading(true); try { const res = await api.post('/shifts/close', { cash, note }); const d=res.data.data; toast.success(`Shift ditutup. Selisih: ${formatRupiah(d.difference)}`); loadMyShift(); if (isAdmin()) fetch(); } catch (e) { toast.error(e.response?.data?.error || 'Gagal menutup shift'); } finally { setShiftLoading(false); }
+	const openShiftDialog = () => { setCashValue('0'); setShiftNote(''); setShiftDialog('open'); };
+	const closeShiftDialog = () => { setCashValue(String(activeShift?.expected_cash || '')); setShiftNote(''); setShiftDialog('close'); };
+	const submitShift = async () => {
+		const cash = Number(cashValue);
+		if (!Number.isFinite(cash) || cash < 0) return toast.error('Nominal kas harus berupa angka nol atau lebih');
+		setShiftLoading(true);
+		try {
+			if (shiftDialog === 'open') {
+				await api.post('/shifts/open', { cash, note: shiftNote.trim() });
+				toast.success('Shift dibuka');
+			} else {
+				const res = await api.post('/shifts/close', { cash, note: shiftNote.trim() });
+				toast.success(`Shift ditutup. Selisih: ${formatRupiah(res.data.data.difference)}`);
+				if (isAdmin()) fetch();
+			}
+			setShiftDialog(null);
+			loadMyShift();
+		} catch (e) {
+			toast.error(e.response?.data?.error || (shiftDialog === 'open' ? 'Gagal membuka shift' : 'Gagal menutup shift'));
+		} finally { setShiftLoading(false); }
 	};
 
   const fetch = async () => {
@@ -49,7 +62,7 @@ export default function ShiftReport() {
   const maxRev = data?.reports?.length ? Math.max(...data.reports.map(r => r.total_revenue), 1) : 1;
 
   return (
-    <div style={{ padding: 32, maxWidth: 1100 }}>
+	<div className="page-content" style={{ maxWidth: 1100 }}>
       <div className="page-header">
         <div>
           <h1 className="page-title font-headline">Laporan per Kasir / Shift</h1>
@@ -71,8 +84,10 @@ export default function ShiftReport() {
 
 	  <section className="card" style={{ marginBottom: 22, display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, flexWrap:'wrap' }}>
 		<div><h2 style={{ fontSize:16, fontWeight:800 }}>Shift Kasir</h2><p style={{ fontSize:13, color:'var(--outline)', marginTop:4 }}>{activeShift ? `Aktif sejak ${activeShift.opened_at} · Kas awal ${formatRupiah(activeShift.opening_cash)}` : 'Belum ada shift aktif'}</p></div>
-		{activeShift ? <button className="btn btn-danger" disabled={shiftLoading} onClick={closeShift}>Tutup Shift</button> : <button className="btn btn-success" disabled={shiftLoading} onClick={openShift}>Buka Shift</button>}
+		{activeShift ? <button className="btn btn-danger" disabled={shiftLoading} onClick={closeShiftDialog}>Tutup Shift</button> : <button className="btn btn-success" disabled={shiftLoading} onClick={openShiftDialog}>Buka Shift</button>}
 	  </section>
+
+	  {shiftDialog && <div className="modal-overlay" role="presentation"><section className="modal" role="dialog" aria-modal="true" aria-labelledby="shift-dialog-title"><div className="modal-header"><div><p className="service-section-kicker">SHIFT KASIR</p><h2 id="shift-dialog-title" className="modal-title">{shiftDialog === 'open' ? 'Buka shift baru' : 'Tutup shift aktif'}</h2></div><button className="icon-btn" disabled={shiftLoading} onClick={() => setShiftDialog(null)} aria-label="Tutup"><Icon name="close" /></button></div><div className="modal-body form-stack"><p className="text-sm text-secondary">{shiftDialog === 'open' ? 'Catat kas awal sebelum transaksi pertama dimulai.' : 'Masukkan kas fisik yang ada di laci untuk menghitung selisih secara otomatis.'}</p><label className="input-group"><span className="input-label">{shiftDialog === 'open' ? 'Kas awal' : 'Kas fisik'} (Rp)</span><input className="input mono" type="number" min="0" inputMode="numeric" autoFocus value={cashValue} onChange={(event) => setCashValue(event.target.value)} /></label><label className="input-group"><span className="input-label">Catatan {shiftDialog === 'close' ? 'selisih' : '(opsional)'}</span><textarea className="input" rows="3" value={shiftNote} onChange={(event) => setShiftNote(event.target.value)} /></label></div><div className="modal-footer"><button className="btn btn-ghost" disabled={shiftLoading} onClick={() => setShiftDialog(null)}>Batal</button><button className={shiftDialog === 'close' ? 'btn btn-danger' : 'btn btn-success'} disabled={shiftLoading} onClick={submitShift}>{shiftLoading ? 'Menyimpan…' : shiftDialog === 'open' ? 'Buka shift' : 'Tutup shift'}</button></div></section></div>}
 
 	  {isAdmin() && data && (
         <>

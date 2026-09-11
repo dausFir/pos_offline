@@ -70,9 +70,10 @@ func Checkout(w http.ResponseWriter, r *http.Request) {
 	var subtotalBeforeDiscount float64
 
 	if req.ServiceOrderID > 0 {
-		var serviceProductID int64; var customerID, invoiceID sql.NullInt64
-		if err:=tx.QueryRow("SELECT service_product_id,customer_id,invoice_id FROM service_orders WHERE id=?",req.ServiceOrderID).Scan(&serviceProductID,&customerID,&invoiceID);err!=nil||serviceProductID==0 { writeJSON(w,404,models.APIResponse{Success:false,Error:"Order servis tidak ditemukan"});return }
+		var serviceProductID int64; var customerID, invoiceID sql.NullInt64; var serviceStatus string
+		if err:=tx.QueryRow("SELECT service_product_id,customer_id,invoice_id,status FROM service_orders WHERE id=?",req.ServiceOrderID).Scan(&serviceProductID,&customerID,&invoiceID,&serviceStatus);err!=nil||serviceProductID==0 { writeJSON(w,404,models.APIResponse{Success:false,Error:"Order servis tidak ditemukan"});return }
 		if invoiceID.Valid { writeJSON(w,400,models.APIResponse{Success:false,Error:"Order servis sudah ditagihkan"});return }
+		if !canFinalizeServiceOrder(serviceStatus) { writeJSON(w,http.StatusConflict,models.APIResponse{Success:false,Error:"Order servis harus berstatus Siap Diambil sebelum dibuatkan invoice"});return }
 		req.Items=[]models.CheckoutItem{{ProductID:serviceProductID,Quantity:1}}
 		rows,err:=tx.Query("SELECT product_id,quantity FROM service_parts WHERE service_order_id=?",req.ServiceOrderID);if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal membaca sparepart"});return};for rows.Next(){var part models.CheckoutItem;rows.Scan(&part.ProductID,&part.Quantity);req.Items=append(req.Items,part)};rows.Close()
 		if req.CustomerID==0&&customerID.Valid { req.CustomerID=customerID.Int64 }

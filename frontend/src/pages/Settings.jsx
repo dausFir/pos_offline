@@ -14,6 +14,11 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [restoring, setRestoring] = useState(false);
+	const [backingUp, setBackingUp] = useState(false);
+	const [backupDialog, setBackupDialog] = useState(null);
+	const [backupPassword, setBackupPassword] = useState('');
+	const [restoreFile, setRestoreFile] = useState(null);
+	const [restoreConfirmation, setRestoreConfirmation] = useState('');
   const fileInputRef = useRef(null);
   const logoInputRef = useRef(null);
   const qrisInputRef = useRef(null);
@@ -106,15 +111,14 @@ export default function Settings() {
   };
 
   const handleBackup = async () => {
-    const password = window.prompt('Buat password backup owner (minimal 12 karakter). Password ini wajib diingat untuk restore.');
-    if (password === null) return;
-    if (password.length < 12) {
+    if (backupPassword.length < 12) {
       toast.error('Password backup minimal 12 karakter.');
       return;
     }
+    setBackingUp(true);
     try {
       toast.success('Memulai backup database...');
-      const response = await api.post('/backup', { password }, { responseType: 'blob' });
+      const response = await api.post('/backup', { password: backupPassword }, { responseType: 'blob' });
       
       const blob = new Blob([response.data]);
       const a = document.createElement('a');
@@ -123,43 +127,50 @@ export default function Settings() {
       a.click();
       URL.revokeObjectURL(a.href);
       toast.success('Backup berhasil diunduh');
+      setBackupDialog(null);
+      setBackupPassword('');
     } catch (err) {
-
       toast.error(err.response?.data?.error || 'Gagal backup database');
-    }
+    } finally { setBackingUp(false); }
   };
 
-  const handleRestore = async (e) => {
+  const selectRestoreFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!confirm('⚠️ PERHATIAN: Restore akan mengganti seluruh data saat ini! Lanjutkan?')) {
-      e.target.value = '';
-      return;
-    }
-    const password = window.prompt('Masukkan password owner yang digunakan saat membuat backup.');
-    if (password === null) {
-      e.target.value = '';
-      return;
-    }
-    if (password.length < 12) {
+    setRestoreFile(file);
+    setBackupPassword('');
+    setRestoreConfirmation('');
+    setBackupDialog('restore');
+    e.target.value = '';
+  };
+
+  const handleRestore = async () => {
+    if (!restoreFile) return;
+    if (backupPassword.length < 12) {
       toast.error('Password backup minimal 12 karakter.');
-      e.target.value = '';
+      return;
+    }
+    if (restoreConfirmation !== 'RESTORE') {
+      toast.error('Ketik RESTORE untuk mengonfirmasi penggantian seluruh data.');
       return;
     }
     setRestoring(true);
     try {
       const formData = new FormData();
-      formData.append('backup', file);
-      formData.append('backup_password', password);
+      formData.append('backup', restoreFile);
+      formData.append('backup_password', backupPassword);
       const res = await api.post('/restore', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       toast.success(res.data.message || 'Restore berhasil. Restart aplikasi!', { duration: 6000 });
+      setBackupDialog(null);
+      setBackupPassword('');
+      setRestoreFile(null);
+      setRestoreConfirmation('');
     } catch (err) {
       toast.error(err.response?.data?.error || 'Gagal restore database');
     } finally {
       setRestoring(false);
-      e.target.value = '';
     }
   };
 
@@ -687,7 +698,7 @@ export default function Settings() {
             <p style={{ fontSize: 12, color: 'var(--outline)', marginBottom: 14, lineHeight: 1.6 }}>
               Buat backup terenkripsi. Password owner diperlukan lagi saat restore dan tidak disimpan aplikasi.
             </p>
-            {isSuperAdmin() ? <button className="btn btn-success w-full" onClick={handleBackup}>
+            {isSuperAdmin() ? <button className="btn btn-success w-full" onClick={() => { setBackupPassword(''); setBackupDialog('backup'); }}>
               <Icon name="download" size={16} /> Download Backup Terenkripsi
             </button> : <button className="btn btn-ghost w-full" disabled>🔒 Hanya Super Admin</button>}
           </div>
@@ -704,7 +715,7 @@ export default function Settings() {
             </p>
             {isSuperAdmin() ? (
               <>
-                <input ref={fileInputRef} type="file" accept=".posbak" style={{ display: 'none' }} onChange={handleRestore} />
+                <input ref={fileInputRef} type="file" accept=".posbak" style={{ display: 'none' }} onChange={selectRestoreFile} />
                 <button
                   className="btn btn-danger w-full"
                   onClick={() => fileInputRef.current?.click()}
@@ -728,6 +739,24 @@ export default function Settings() {
           ⚠️ <strong>Rekomendasi:</strong> Lakukan backup minimal seminggu sekali. Simpan file backup di USB flashdisk atau Google Drive agar aman jika PC bermasalah. Setelah restore, restart aplikasi (tutup dan buka kembali .exe).
         </div>
       </section>
+
+      {backupDialog && <div className="modal-overlay" role="presentation">
+        <section className="modal" role="dialog" aria-modal="true" aria-labelledby="backup-dialog-title">
+          <div className="modal-header">
+            <div><p className="service-section-kicker">KEAMANAN DATA</p><h2 id="backup-dialog-title" className="modal-title">{backupDialog === 'backup' ? 'Buat backup terenkripsi' : 'Restore backup terenkripsi'}</h2></div>
+            <button className="icon-btn" disabled={restoring || backingUp} onClick={() => setBackupDialog(null)} aria-label="Tutup"><Icon name="close" /></button>
+          </div>
+          <div className="modal-body form-stack">
+            {backupDialog === 'backup' ? <p className="text-sm text-secondary">Buat password owner minimal 12 karakter. Password tidak disimpan aplikasi dan diperlukan kembali saat restore.</p> : <p className="text-sm text-secondary">File <strong>{restoreFile?.name}</strong> akan menggantikan seluruh data saat ini. Pastikan Anda sudah membuat backup terbaru terlebih dahulu.</p>}
+            <label className="input-group"><span className="input-label">Password backup</span><input className="input" type="password" minLength="12" autoFocus value={backupPassword} onChange={(event) => setBackupPassword(event.target.value)} placeholder="Minimal 12 karakter" /></label>
+            {backupDialog === 'restore' && <label className="input-group"><span className="input-label">Konfirmasi berisiko tinggi</span><input className="input mono" value={restoreConfirmation} onChange={(event) => setRestoreConfirmation(event.target.value.toUpperCase())} placeholder="Ketik RESTORE" /><span className="text-xs text-muted">Ketik tepat <strong>RESTORE</strong> untuk melanjutkan.</span></label>}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-ghost" disabled={restoring || backingUp} onClick={() => setBackupDialog(null)}>Batal</button>
+            <button className={backupDialog === 'restore' ? 'btn btn-danger' : 'btn btn-primary'} disabled={restoring || backingUp} onClick={backupDialog === 'backup' ? handleBackup : handleRestore}>{backingUp ? 'Membuat backup…' : restoring ? 'Memulihkan…' : backupDialog === 'backup' ? 'Download backup' : 'Ganti data & restore'}</button>
+          </div>
+        </section>
+      </div>}
     </div>
   );
 }

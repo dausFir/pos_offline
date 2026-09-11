@@ -36,8 +36,8 @@ func main() {
 	middleware.InitializeJWT()
 
 	fmt.Println("╔══════════════════════════════════════════════════╗")
-	fmt.Println("║        KASIR & MANAJEMEN GUDANG UMKM v3.1        ║")
-	fmt.Println("║     Offline-First · Beli Putus · UMKM Ready      ║")
+	fmt.Println("║                  RAPIPOS v3.1                    ║")
+	fmt.Println("║   Kasir, stok, dan usaha lebih rapi · Offline    ║")
 	fmt.Println("╚══════════════════════════════════════════════════╝")
 	fmt.Println()
 
@@ -107,6 +107,7 @@ func main() {
 	prot.Handle("/service-orders/{id}/deposit", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.RecordServiceDeposit))).Methods("POST")
 	prot.Handle("/service-orders/{id}/costs", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.AddServiceCost))).Methods("POST")
 	prot.Handle("/service-orders/{id}/reserve", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.ReserveServiceParts))).Methods("POST")
+	prot.Handle("/service-technicians", middleware.RequireRole("super_admin", "admin", "cashier")(http.HandlerFunc(handlers.GetServiceTechnicians))).Methods("GET")
 
 	// Dashboard
 	prot.Handle("/dashboard/stats", middleware.RequireRole("super_admin", "admin")(http.HandlerFunc(handlers.GetDashboardStats))).Methods("GET")
@@ -247,7 +248,7 @@ func main() {
 	services.SetServerInfo(host,port,lanURL)
 
 	fmt.Println()
-	fmt.Println("✅ Server berhasil dijalankan! (v3.1)")
+	fmt.Println("✅ RapiPos berhasil dijalankan! (v3.1)")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Printf("🖥️  Buka di PC ini        : http://localhost:%s\n", port)
 	if localIP != "" {

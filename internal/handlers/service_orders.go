@@ -20,6 +20,41 @@ import (
 
 var serviceStatuses = map[string]bool{"received": true, "diagnosis": true, "awaiting_approval": true, "awaiting_parts": true, "in_progress": true, "ready": true, "completed": true, "cancelled": true}
 
+// Service orders advance through an explicit state machine. Completed is set by
+// a successful final invoice, while cancelled and completed are terminal states.
+var serviceTransitions = map[string]map[string]bool{
+	"received":          {"diagnosis": true, "awaiting_approval": true, "awaiting_parts": true, "in_progress": true, "ready": true, "cancelled": true},
+	"diagnosis":         {"awaiting_approval": true, "awaiting_parts": true, "in_progress": true, "ready": true, "cancelled": true},
+	"awaiting_approval": {"diagnosis": true, "awaiting_parts": true, "in_progress": true, "cancelled": true},
+	"awaiting_parts":    {"in_progress": true, "ready": true, "cancelled": true},
+	"in_progress":       {"awaiting_parts": true, "ready": true, "cancelled": true},
+	"ready":             {"cancelled": true},
+	"completed":         {},
+	"cancelled":         {},
+}
+
+func CanTransitionServiceOrder(from, to string) bool {
+	if from == "completed" || from == "cancelled" || !serviceStatuses[to] {
+		return false
+	}
+	if from == to {
+		return true // used when only the assigned technician changes
+	}
+	return serviceTransitions[from][to]
+}
+
+func canFinalizeServiceOrder(status string) bool {
+	return status == "ready"
+}
+
+func validServiceTechnician(tx *sql.Tx, id int64) bool {
+	if id <= 0 {
+		return true
+	}
+	var count int
+	return tx.QueryRow("SELECT COUNT(*) FROM users WHERE id=? AND is_deleted=0", id).Scan(&count) == nil && count == 1
+}
+
 func serviceOrderNumber(tx *sql.Tx) (string, error) {
 	key := time.Now().Format("20060102")
 	var seq int
@@ -73,6 +108,24 @@ func GetServiceOrders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w,200,models.APIResponse{Success:true,Data:orders})
 }
 
+func GetServiceTechnicians(w http.ResponseWriter, _ *http.Request) {
+	rows, err := database.DB.Query(`SELECT id, username, role FROM users WHERE is_deleted=0 ORDER BY username COLLATE NOCASE`)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal memuat daftar petugas"})
+		return
+	}
+	defer rows.Close()
+
+	staff := []models.User{}
+	for rows.Next() {
+		var user models.User
+		if err := rows.Scan(&user.ID, &user.Username, &user.Role); err == nil {
+			staff = append(staff, user)
+		}
+	}
+	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Data: staff})
+}
+
 func GetServiceOrder(w http.ResponseWriter, r *http.Request) { id,_:=strconv.ParseInt(mux.Vars(r)["id"],10,64); var o models.ServiceOrder; if err:=scanServiceOrder(database.DB.QueryRow(serviceOrderSelect+" WHERE s.id=?",id),&o);err!=nil{writeJSON(w,404,models.APIResponse{Success:false,Error:"Order servis tidak ditemukan"});return};hydrateServiceOrder(&o);writeJSON(w,200,models.APIResponse{Success:true,Data:o}) }
 
 func CreateServiceOrder(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +133,7 @@ func CreateServiceOrder(w http.ResponseWriter, r *http.Request) {
 	if json.NewDecoder(r.Body).Decode(&req)!=nil || req.ItemName=="" || req.CustomerID<=0 || req.ServiceProductID<=0 { writeJSON(w,400,models.APIResponse{Success:false,Error:"Pelanggan, layanan, dan barang servis wajib diisi"});return }
 	if req.EstimatedCost<0 || req.DepositAmount<0 || (req.DepositAmount>0 && !validPaymentMethod(req.DepositPaymentMethod)) { writeJSON(w,400,models.APIResponse{Success:false,Error:"DP dan metode pembayaran wajib valid"});return }
 	tx,err:=database.DB.Begin();if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal membuat order"});return};defer tx.Rollback()
-	var exists int; if tx.QueryRow("SELECT COUNT(*) FROM customers WHERE id=? AND is_deleted=0",req.CustomerID).Scan(&exists)!=nil||exists!=1{writeJSON(w,400,models.APIResponse{Success:false,Error:"Pelanggan tidak ditemukan"});return}; if tx.QueryRow("SELECT COUNT(*) FROM products WHERE id=? AND item_type='service' AND is_deleted=0",req.ServiceProductID).Scan(&exists)!=nil||exists!=1{writeJSON(w,400,models.APIResponse{Success:false,Error:"Master jasa tidak ditemukan"});return}
+	var exists int; if tx.QueryRow("SELECT COUNT(*) FROM customers WHERE id=? AND is_deleted=0",req.CustomerID).Scan(&exists)!=nil||exists!=1{writeJSON(w,400,models.APIResponse{Success:false,Error:"Pelanggan tidak ditemukan"});return}; if tx.QueryRow("SELECT COUNT(*) FROM products WHERE id=? AND item_type='service' AND is_deleted=0",req.ServiceProductID).Scan(&exists)!=nil||exists!=1{writeJSON(w,400,models.APIResponse{Success:false,Error:"Master jasa tidak ditemukan"});return}; if !validServiceTechnician(tx, req.TechnicianID) { writeJSON(w,400,models.APIResponse{Success:false,Error:"Petugas servis tidak ditemukan"});return }
 	number,err:=serviceOrderNumber(tx);if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal memberi nomor order"});return}; token,err:=randomTrackingToken();if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal membuat token tracking"});return}
 	var due,tech interface{};if req.DueAt!="" { d,e:=time.Parse(time.RFC3339,req.DueAt);if e!=nil{writeJSON(w,400,models.APIResponse{Success:false,Error:"Format jatuh tempo tidak valid"});return};due=d };if req.TechnicianID>0{tech=req.TechnicianID}
 	now:=time.Now();res,err:=tx.Exec(`INSERT INTO service_orders(order_number,customer_id,service_product_id,item_name,item_brand,item_serial,complaint,diagnosis,status,technician_id,estimated_cost,deposit_amount,due_at,tracking_token,notes,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,number,req.CustomerID,req.ServiceProductID,req.ItemName,req.ItemBrand,req.ItemSerial,req.Complaint,req.Diagnosis,"received",tech,req.EstimatedCost,0,due,token,req.Notes,claims.UserID,now,now);if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal menyimpan order"});return};id,_:=res.LastInsertId()
@@ -88,7 +141,58 @@ func CreateServiceOrder(w http.ResponseWriter, r *http.Request) {
 	tx.Exec("INSERT INTO service_progress(service_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?)",id,"received","Barang diterima",claims.UserID,now);queueTracking(tx,id);if err=tx.Commit();err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal menyimpan order"});return}; services.TriggerTrackingSync();writeJSON(w,201,models.APIResponse{Success:true,Message:"Order servis dibuat",Data:map[string]interface{}{"id":id,"order_number":number,"tracking_token":token}})
 }
 
-func UpdateServiceStatus(w http.ResponseWriter,r *http.Request){claims:=middleware.GetClaims(r);id,_:=strconv.ParseInt(mux.Vars(r)["id"],10,64);var req models.ServiceStatusRequest;if json.NewDecoder(r.Body).Decode(&req)!=nil||!serviceStatuses[req.Status]{writeJSON(w,400,models.APIResponse{Success:false,Error:"Status servis tidak valid"});return};tx,err:=database.DB.Begin();if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal update order"});return};defer tx.Rollback();var invoice sql.NullInt64;if tx.QueryRow("SELECT invoice_id FROM service_orders WHERE id=?",id).Scan(&invoice)!=nil{writeJSON(w,404,models.APIResponse{Success:false,Error:"Order servis tidak ditemukan"});return};if invoice.Valid&&req.Status!="completed"{writeJSON(w,400,models.APIResponse{Success:false,Error:"Order yang sudah ditagihkan tidak dapat diubah"});return};var tech interface{}=nil;if req.TechnicianID>0{tech=req.TechnicianID};now:=time.Now();tx.Exec("UPDATE service_orders SET status=?,technician_id=COALESCE(?,technician_id),updated_at=? WHERE id=?",req.Status,tech,now,id);if req.Status=="cancelled" { tx.Exec("UPDATE service_parts SET reserved_quantity=0 WHERE service_order_id=?",id) };tx.Exec("INSERT INTO service_progress(service_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?)",id,req.Status,req.Note,claims.UserID,now);queueTracking(tx,id);if err=tx.Commit();err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal update order"});return};services.TriggerTrackingSync();writeJSON(w,200,models.APIResponse{Success:true,Message:"Progress servis diperbarui"})}
+func UpdateServiceStatus(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.GetClaims(r)
+	id, _ := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	var req models.ServiceStatusRequest
+	if json.NewDecoder(r.Body).Decode(&req) != nil || !serviceStatuses[req.Status] {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Status servis tidak valid"})
+		return
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal update order"})
+		return
+	}
+	defer tx.Rollback()
+
+	var currentStatus string
+	var invoice sql.NullInt64
+	if tx.QueryRow("SELECT status, invoice_id FROM service_orders WHERE id=?", id).Scan(&currentStatus, &invoice) != nil {
+		writeJSON(w, http.StatusNotFound, models.APIResponse{Success: false, Error: "Order servis tidak ditemukan"})
+		return
+	}
+	if invoice.Valid || !CanTransitionServiceOrder(currentStatus, req.Status) {
+		writeJSON(w, http.StatusConflict, models.APIResponse{Success: false, Error: "Perubahan status tidak diizinkan untuk order ini"})
+		return
+	}
+	if !validServiceTechnician(tx, req.TechnicianID) {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Petugas servis tidak ditemukan"})
+		return
+	}
+
+	var technician interface{}
+	if req.TechnicianID > 0 {
+		technician = req.TechnicianID
+	}
+	now := time.Now()
+	if _, err = tx.Exec("UPDATE service_orders SET status=?,technician_id=COALESCE(?,technician_id),updated_at=? WHERE id=?", req.Status, technician, now, id); err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal update order"})
+		return
+	}
+	if req.Status == "cancelled" {
+		tx.Exec("UPDATE service_parts SET reserved_quantity=0 WHERE service_order_id=?", id)
+	}
+	tx.Exec("INSERT INTO service_progress(service_order_id,status,note,actor_id,created_at) VALUES(?,?,?,?,?)", id, req.Status, req.Note, claims.UserID, now)
+	queueTracking(tx, id)
+	if err = tx.Commit(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal update order"})
+		return
+	}
+	services.TriggerTrackingSync()
+	writeJSON(w, http.StatusOK, models.APIResponse{Success: true, Message: "Progres servis diperbarui"})
+}
 
 func AddServicePart(w http.ResponseWriter,r *http.Request){id,_:=strconv.ParseInt(mux.Vars(r)["id"],10,64);var req models.ServicePartRequest;if json.NewDecoder(r.Body).Decode(&req)!=nil||req.ProductID<=0||req.Quantity<=0{writeJSON(w,400,models.APIResponse{Success:false,Error:"Sparepart dan jumlah wajib valid"});return};tx,err:=database.DB.Begin();if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal menambah sparepart"});return};defer tx.Rollback();var price float64;var typ string;if tx.QueryRow("SELECT sell_price,item_type FROM products WHERE id=? AND is_deleted=0",req.ProductID).Scan(&price,&typ)!=nil||typ!="physical"{writeJSON(w,400,models.APIResponse{Success:false,Error:"Sparepart fisik tidak ditemukan"});return};var billed sql.NullInt64;if tx.QueryRow("SELECT invoice_id FROM service_orders WHERE id=?",id).Scan(&billed)!=nil||billed.Valid{writeJSON(w,400,models.APIResponse{Success:false,Error:"Order sudah ditagihkan atau tidak ditemukan"});return};if req.UnitPrice<=0{req.UnitPrice=price};_,err=tx.Exec(`INSERT INTO service_parts(service_order_id,product_id,quantity,unit_price,reserved_quantity) VALUES(?,?,?,?,0) ON CONFLICT(service_order_id,product_id) DO UPDATE SET quantity=excluded.quantity,unit_price=excluded.unit_price,reserved_quantity=0`,id,req.ProductID,req.Quantity,req.UnitPrice);if err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal simpan sparepart"});return};tx.Exec("UPDATE service_orders SET updated_at=? WHERE id=?",time.Now(),id);queueTracking(tx,id);if err=tx.Commit();err!=nil{writeJSON(w,500,models.APIResponse{Success:false,Error:"Gagal simpan sparepart"});return};services.TriggerTrackingSync();writeJSON(w,200,models.APIResponse{Success:true,Message:"Sparepart masuk estimasi; stok dipotong saat pelunasan"})}
 

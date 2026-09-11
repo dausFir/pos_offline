@@ -42,7 +42,7 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Request tidak valid"}); return
 	}
 	if req.Name == "" { writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Nama kategori wajib diisi"}); return }
-	if req.Color == "" { req.Color = "#005cbb" }
+	if req.Color == "" { req.Color = "#08766a" }
 
 	now := time.Now()
 	result, err := database.DB.Exec(
@@ -63,7 +63,7 @@ func UpdateCategory(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Request tidak valid"}); return
 	}
 	if req.Name == "" { writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Nama kategori wajib diisi"}); return }
-	if req.Color == "" { req.Color = "#005cbb" }
+	if req.Color == "" { req.Color = "#08766a" }
 
 	_, err := database.DB.Exec(
 		"UPDATE categories SET name=?, description=?, color=?, updated_at=?, updated_by=?, version=version+1 WHERE id=? AND is_deleted=0",
