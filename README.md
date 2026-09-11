@@ -8,6 +8,14 @@ RapiPos berjalan sebagai satu aplikasi lokal di PC toko. Data disimpan di SQLite
 
 > RapiPos dirancang untuk **jaringan lokal tepercaya**. Jangan membuka port aplikasi ke internet atau melakukan port-forward pada router.
 
+## Mulai dari sini
+
+1. Jalankan aplikasi RapiPos di PC toko.
+2. Login sebagai owner untuk menyelesaikan pengaturan toko, pengguna, dan alamat server tracking bila digunakan.
+3. Gunakan menu **Kasir** untuk transaksi barang atau jasa; alamat LAN pada dashboard dapat dibuka dari perangkat lain di jaringan yang sama.
+
+Petunjuk instalasi, konfigurasi, backup, dan pengembangan tersedia di bagian-bagian berikut.
+
 ## Yang Bisa Dilakukan
 
 | Area | Kemampuan utama |
