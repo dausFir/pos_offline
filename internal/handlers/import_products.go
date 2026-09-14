@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,6 +39,7 @@ func startProductImportWorker() {
 // ImportProductsCSV creates an asynchronous import job. Each chunk is committed atomically.
 func ImportProductsCSV(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r)
+	r.Body = http.MaxBytesReader(w, r.Body, 20<<20)
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "File maksimal 20MB"})
 		return
@@ -51,6 +55,22 @@ func ImportProductsCSV(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "File terlalu besar"})
 		return
 	}
+	// File uploads are untrusted. CSV is the only supported format: reject
+	// binary payloads, deceptive extensions, and the EICAR antivirus test
+	// signature before the data reaches the import worker.
+	if strings.ToLower(filepath.Ext(header.Filename)) != ".csv" || bytes.IndexByte(data, 0) >= 0 {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Hanya file CSV teks yang diizinkan"})
+		return
+	}
+	if bytes.Contains(bytes.ToUpper(data), []byte("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")) {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "File ditolak oleh pemeriksaan keamanan"})
+		return
+	}
+	contentType := http.DetectContentType(data)
+	if !strings.HasPrefix(contentType, "text/") && contentType != "application/octet-stream" {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Konten file bukan CSV teks"})
+		return
+	}
 	mode := r.FormValue("stock_mode")
 	if mode == "" {
 		mode = "replace_stock"
@@ -63,7 +83,8 @@ func ImportProductsCSV(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: err.Error()})
 		return
 	}
-	result, err := database.DB.Exec("INSERT INTO import_jobs (file_name, stock_mode, status, created_by, created_at) VALUES (?,?, 'queued', ?, ?)", header.Filename, mode, claims.UserID, time.Now())
+	fileName := filepath.Base(header.Filename)
+	result, err := database.DB.Exec("INSERT INTO import_jobs (file_name, stock_mode, status, created_by, created_at) VALUES (?,?, 'queued', ?, ?)", fileName, mode, claims.UserID, time.Now())
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, models.APIResponse{Success: false, Error: "Gagal membuat import job"})
 		return

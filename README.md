@@ -16,6 +16,10 @@ RapiPos berjalan sebagai satu aplikasi lokal di PC toko. Data disimpan di SQLite
 
 Petunjuk instalasi, konfigurasi, backup, dan pengembangan tersedia di bagian-bagian berikut.
 
+### Pemeriksaan kualitas dan installer Windows
+
+GitHub Actions otomatis menjalankan `go vet ./...`, `go test -race -cover ./...`, `go build .`, serta test/build/audit frontend pada setiap push dan pull request. Untuk build lokal, pasang **Go 1.21+**, Node.js 20+, dan GCC (SQLite), lalu jalankan `build.bat`. Setelah `RapiPos.exe` terbentuk, buka `installer.iss` dengan **Inno Setup 6** untuk menghasilkan `RapiPos-Setup.exe`.
+
 ## Yang Bisa Dilakukan
 
 | Area | Kemampuan utama |

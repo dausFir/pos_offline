@@ -13,6 +13,14 @@ import (
 	"kasir-umkm/internal/models"
 )
 
+// Strong passwords reduce the blast radius of an owner-initiated offline reset.
+func validPassword(password string) bool {
+	if len(password) < 12 || len(password) > 128 { return false }
+	var upper, lower, digit bool
+	for _, char := range password { upper = upper || ('A' <= char && char <= 'Z'); lower = lower || ('a' <= char && char <= 'z'); digit = digit || ('0' <= char && char <= '9') }
+	return upper && lower && digit
+}
+
 func GetUsers(w http.ResponseWriter, r *http.Request) {
 	rows, err := database.DB.Query(
 		`SELECT id, username, role, version, created_at, updated_at FROM users WHERE is_deleted=0 ORDER BY created_at`,
@@ -42,8 +50,8 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Request tidak valid"})
 		return
 	}
-	if req.Username == "" || len(req.Password) < 12 {
-		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Username wajib diisi dan password minimal 12 karakter"})
+	if req.Username == "" || !validPassword(req.Password) {
+		writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Username wajib diisi; password minimal 12 karakter serta mengandung huruf besar, huruf kecil, dan angka"})
 		return
 	}
 	validRoles := map[string]bool{"super_admin": true, "admin": true, "cashier": true}
@@ -146,8 +154,8 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	if req.NewPassword != "" {
-		if len(req.NewPassword) < 12 {
-			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password baru minimal 12 karakter"})
+		if !validPassword(req.NewPassword) {
+			writeJSON(w, http.StatusBadRequest, models.APIResponse{Success: false, Error: "Password baru minimal 12 karakter serta mengandung huruf besar, huruf kecil, dan angka"})
 			return
 		}
 		hash, _ := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)

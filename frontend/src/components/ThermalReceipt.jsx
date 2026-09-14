@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const formatRp = (n) => 'Rp ' + Number(n || 0).toLocaleString('id-ID');
+const escapeHTML = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 
 const formatDateTime = (d) => {
   const dt = new Date(d);
@@ -140,15 +141,15 @@ export function printReceipt(transaction, settings = {}, paperWidth = '80mm') {
 
 <div class="center">
   ${settings.logo_image_b64 ? `<div style="margin-bottom: 6px;"><img src="data:image/png;base64,${settings.logo_image_b64}" style="max-width: ${charWidth * 2}px; max-height: 40px; width: auto; height: auto;" /></div>` : ''}
-  <div class="xl">${storeName}</div>
-  ${storeAddress ? `<div>${storeAddress}</div>` : ''}
+  <div class="xl">${escapeHTML(storeName)}</div>
+  ${storeAddress ? `<div>${escapeHTML(storeAddress)}</div>` : ''}
 </div>
 
 <div class="dline"></div>
 
-<div class="row"><span>No. Struk</span><span class="bold">${transaction.invoice_number}</span></div>
+<div class="row"><span>No. Struk</span><span class="bold">${escapeHTML(transaction.invoice_number)}</span></div>
 <div class="row"><span>Tanggal</span><span>${formatDateTime(transaction.created_at)}</span></div>
-<div class="row"><span>Kasir</span><span>${transaction.username || '-'}</span></div>
+<div class="row"><span>Kasir</span><span>${escapeHTML(transaction.username || '-')}</span></div>
 <div class="row"><span>Metode</span><span class="bold">${getPaymentMethodDisplay(transaction.payment_method)}</span></div>
 
 ${transaction.status === 'cancelled' ? `<div class="status-cancel">*** TRANSAKSI DIBATALKAN ***</div>` : ''}
@@ -159,7 +160,7 @@ ${transaction.status === 'cancelled' ? `<div class="status-cancel">*** TRANSAKSI
 
 ${(transaction.details || []).map(d => `
 <div class="item">
-  <div class="name">${d.product_name || d.name || '-'}</div>
+  <div class="name">${escapeHTML(d.product_name || d.name || '-')}</div>
   <div class="detail">
     <span>${d.quantity} x ${formatRp(d.unit_price)}</span>
     <span>${formatRp(d.subtotal)}</span>
@@ -172,7 +173,7 @@ ${(transaction.details || []).map(d => `
 <div class="row"><span>Subtotal</span><span>${formatRp(totals.itemSubtotal)}</span></div>
 
 ${totals.discountAmount > 0 ? `
-<div class="row"><span>Diskon (${transaction.discount_code || 'DISC'})</span><span>- ${formatRp(totals.discountAmount)}</span></div>
+<div class="row"><span>Diskon (${escapeHTML(transaction.discount_code || 'DISC')})</span><span>- ${formatRp(totals.discountAmount)}</span></div>
 <div class="row"><span>Subtotal stlh diskon</span><span>${formatRp(totals.subtotalAfterDiscount)}</span></div>
 ` : ''}
 
@@ -201,7 +202,7 @@ ${transaction.qris_amount > 0 ? `<div class="row"><span>QRIS</span><span>${forma
 <div class="dline"></div>
 
 <div class="footer">
-  <div>${receiptFooter}</div>
+  <div>${escapeHTML(receiptFooter)}</div>
   <div>Barang yang sudah dibeli</div>
   <div>tidak dapat dikembalikan</div>
   <div style="margin-top:2mm; font-size:8px; color:#555;">${new Date().toLocaleString('id-ID')}</div>
