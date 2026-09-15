@@ -20,6 +20,8 @@ Petunjuk instalasi, konfigurasi, backup, dan pengembangan tersedia di bagian-bag
 
 GitHub Actions otomatis menjalankan `go vet ./...`, `go test -race -cover ./...`, `go build .`, serta test/build/audit frontend pada setiap push dan pull request. Untuk build lokal, pasang **Go 1.21+**, Node.js 20+, dan GCC (SQLite), lalu jalankan `build.bat`. Setelah `RapiPos.exe` terbentuk, buka `installer.iss` dengan **Inno Setup 6** untuk menghasilkan `RapiPos-Setup.exe`.
 
+Untuk distribusi ke pelanggan, gunakan `scripts/build-release.ps1` setelah memasang `garble`. Perintah ini menghapus metadata build, meng-obfuscate binary Go, dan menghasilkan checksum SHA-256. Detail serta batasan perlindungannya ada di [SECURITY.md](SECURITY.md).
+
 ## Yang Bisa Dilakukan
 
 | Area | Kemampuan utama |
